@@ -3,6 +3,7 @@ from api.serializers import RegisterSerializer
 from rest_framework import viewsets, status, filters
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, DjangoModelPermissions, AllowAny
+from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry
 from api.serializers import ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer
@@ -161,6 +162,73 @@ class TasksViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     search_fields = ['status', 'description', 'priority']
     ordering_fields = ['status', 'priority']
+
+    @action(detail=True, methods=['POST'])
+    def assign(self, request, pk=None):
+        task = self.get_object()
+
+        user_id = request.data.get("user_id")
+
+        if not user_id:
+            return Response(
+                {"error": "user_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        task.assigned_to = user
+        task.save()
+
+        return Response(
+            {"message": f"Task assigned to {user.username}"}, status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=['POST'])
+    def transition(self, request, pk=None):
+        task = self.get_object()
+
+        new_status = request.data.get("status")
+        if not new_status:
+            return Response(
+                {"error": "status is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        allowed_transitions = {
+            Task.StatusChoices.TODO: [Task.StatusChoices.IN_PROGRESS],
+            Task.StatusChoices.IN_PROGRESS: [Task.StatusChoices.DONE],
+            Task.StatusChoices.DONE: []
+        }
+
+        current_status = task.status
+
+        if new_status not in allowed_transitions.get(current_status, []):
+            return Response(
+                {
+                    "error": "Invalid status transition",
+                    "current_status": current_status,
+                    "allowed_next_transition": allowed_transitions.get(current_status, [])
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        task.status = new_status
+        task.save()
+
+        return Response(
+            {
+                "message": "Task status updated successfully",
+                "old_status": current_status,
+                "new_status": new_status
+            },
+            status=status.HTTP_200_OK
+        )
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

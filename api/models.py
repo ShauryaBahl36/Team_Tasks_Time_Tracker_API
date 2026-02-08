@@ -71,7 +71,7 @@ class Task(models.Model):
     tags = models.ManyToManyField(Tag, blank=True)
 
     @property
-    def days_left(self):
+    def days_left(self) -> int:
         days = (self.due_date - timezone.now().date()).days
         return max(days, 0)
     
@@ -93,5 +93,7 @@ class TimeEntry(models.Model):
     billable = models.BooleanField(default=True)
 
     @property
-    def timeline(self):
-        return self.start_time < self.end_time
+    def timeline(self) -> bool:
+        if self.end_time is None:
+            return False
+        return self.end_time - self.start_time

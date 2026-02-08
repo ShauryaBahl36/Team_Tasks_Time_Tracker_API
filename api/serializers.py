@@ -91,6 +91,7 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class TimeEntrySerializer(serializers.ModelSerializer):
+    timeline = serializers.BooleanField(read_only=True)
     class Meta:
         model = TimeEntry
         fields = (
