@@ -8,7 +8,7 @@ urlpatterns = [
 ]
 
 router = DefaultRouter()
-router.register('tasks', views.TasksViewSet)
+router.register('tasks', views.TasksViewSet, basename='tasks')
 router.register('time-entries', views.TimeEntryViewSet)
 router.register('comment', views.CommentViewSet)
 urlpatterns += router.urls

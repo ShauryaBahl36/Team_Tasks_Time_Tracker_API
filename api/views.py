@@ -156,12 +156,14 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
 #             return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
         
 class TasksViewSet(viewsets.ModelViewSet):
-    queryset = Task.objects.all()
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     search_fields = ['status', 'description', 'priority']
     ordering_fields = ['status', 'priority']
+
+    def get_queryset(self):
+        return Task.objects.filter(assigned_to=self.request.user)
 
     @action(detail=True, methods=['POST'])
     def assign(self, request, pk=None):
