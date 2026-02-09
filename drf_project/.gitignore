@@ -2,7 +2,6 @@
 __pycache__/
 *.py[codz]
 *$py.class
-*.pyc
 
 # C extensions
 *.so
@@ -162,17 +161,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-
-# MacOS
-.DS_Store
-
-# Django stuff
-db.sqlite3
-
-# Node
-node_modules/
-dist/
-build/
 
 # pytype static type analyzer
 .pytype/
