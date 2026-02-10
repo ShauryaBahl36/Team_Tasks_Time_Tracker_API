@@ -248,13 +248,21 @@ function TaskCard({ task, onDelete, onUpdate }) {
     assigned_to: task.assigned_to,
   });
 
+  const allowedTransitions = {
+    "To-Do": ["In-Progress"],
+    "In-Progress": ["Done"],
+    "Done": []
+  };
+
+  const allowedNextStatuses = allowedTransitions[task.status] || [];
+
   const handleSave = () => {
     onUpdate(task.id, updatedTask);
     setEditMode(false);
   };
 
   return (
-    <div style={{ border: "1px solid gray", padding: "15px", marginBottom: "10px" }}>
+    <div style={{ border: "1px solid gray", padding: "15px", marginBottom: "10px", borderRadius: "8px" }}>
       {editMode ? (
         <>
           <input
@@ -271,6 +279,48 @@ function TaskCard({ task, onDelete, onUpdate }) {
               setUpdatedTask({ ...updatedTask, description: e.target.value })
             }
           />
+
+          {/* Priority Dropdown */}
+          <label><b>Priority:</b></label>
+          <select
+            value={updatedTask.priority}
+            onChange={(e) =>
+              setUpdatedTask({ ...updatedTask, priority: e.target.value })
+            }
+          >
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+
+          <br /><br />
+
+          {/* Status Dropdown with Workflow Guard */}
+          <label><b>Status:</b></label>
+          <select
+            value={updatedTask.status}
+            onChange={(e) =>
+              setUpdatedTask({ ...updatedTask, status: e.target.value })
+            }
+          >
+            {/* Current status always allowed */}
+            <option value={task.status}>{task.status}</option>
+
+            {/* Only show next valid statuses */}
+            {allowedNextStatuses.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+
+          {allowedNextStatuses.length === 0 && (
+            <p style={{ color: "red" }}>
+              Task is already Done. Status cannot be changed.
+            </p>
+          )}
+
+          <br />
 
           <button onClick={handleSave}>Save</button>
           <button onClick={() => setEditMode(false)}>Cancel</button>
