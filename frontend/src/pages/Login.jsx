@@ -11,19 +11,24 @@ export default function Login() {
     async function handleSubmit() {
         try {
             if (!username || !password){
-                alert("Please enter Username or Password")
+                alert("Please enter Username or Password");
+                return;
             }
             const payload = {
                 "username": username,
                 "password": password
-            }
-            const response = await axios.post("http://localhost:8000/auth/login/", payload)
-            console.log(response)
-            navigate("/home")
+            };
+            const response = await axios.post("http://localhost:8000/auth/login/", payload);
+            console.log(response);
+
+            localStorage.setItem("access", response.data.access);
+            localStorage.setItem("refresh", response.data.refresh);
+            navigate("/home");
         
         } catch(error){
             console.log(error.response?.data || error.message);
-            alert("Invalid Username or password")
+            alert("Invalid Username or password");
+            return;
         }
     }
 
