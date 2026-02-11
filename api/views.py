@@ -7,7 +7,8 @@ from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry
 from api.serializers import ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer
-from api.permissions import IsAdminUserRole
+from api.permissions import IsAdminUserRole, IsOwnerOrProjectManager
+from api.filters import TimeEntryFilter
 from rest_framework.views import APIView
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.encoding import force_str, force_bytes
@@ -134,12 +135,21 @@ class GetProjectMembershipAPIView(APIView):
         return Response(serializer.data)
     
 class TimeEntryViewSet(viewsets.ModelViewSet):
-    queryset = TimeEntry.objects.all()
+    # queryset = TimeEntry.objects.all()
     serializer_class = TimeEntrySerializer
-    permission_classes = [IsAdminUser]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    permission_classes = [IsAuthenticated, IsOwnerOrProjectManager]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = TimeEntryFilter
     search_fields = ['task', 'billable', 'user']
-    ordering_fields = ['task', 'billable']
+    ordering_fields = ["start_time", "end_time", "billable"]
+    ordering = ["-start_time"]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        return TimeEntry.objects.filter(
+            task__project__projectmembership__user=user
+        ).distinct()
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

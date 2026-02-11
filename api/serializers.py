@@ -91,10 +91,11 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class TimeEntrySerializer(serializers.ModelSerializer):
-    timeline = serializers.BooleanField(read_only=True)
+    timeline = serializers.DurationField(read_only=True)
     class Meta:
         model = TimeEntry
         fields = (
+            'id',
             'task',
             'user',
             'start_time',
@@ -108,17 +109,18 @@ class TimeEntrySerializer(serializers.ModelSerializer):
     def validate(self, data):
         request = self.context['request']
         user = request.user
-        task = data.get("task")
-        start = data.get("start_time")
-        end = data.get("end_time")
+        task = data.get("task") or getattr(self.instance, "task", None)
+        start = data.get("start_time") or getattr(self.instance, "start_time", None)
+        end = data.get("end_time") or getattr(self.instance, "end_time", None)
 
         if end and end <= start:
             raise serializers.ValidationError("End time must be greater than start time")
 
-        is_member = ProjectMembership.objects.filter(user=user, project=task.project).exists()
+        if task:
+            is_member = ProjectMembership.objects.filter(user=user, project=task.project).exists()
 
-        if not is_member:
-            raise serializers.ValidationError("You are not a member of this project, cannot log time.")
+            if not is_member:
+                raise serializers.ValidationError("You are not a member of this project, cannot log time.")
         return data
 
 

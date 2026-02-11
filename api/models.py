@@ -93,7 +93,7 @@ class TimeEntry(models.Model):
     billable = models.BooleanField(default=True)
 
     @property
-    def timeline(self) -> bool:
+    def timeline(self):
         if self.end_time is None:
-            return False
+            return None
         return self.end_time - self.start_time

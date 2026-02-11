@@ -1,5 +1,6 @@
 from .models import ProjectMembership, Task
 from rest_framework import permissions
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 class IsAdminUserRole(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -15,3 +16,17 @@ class IsProjectMember(permissions.BasePermission):
             project = obj.task.project
         
         return ProjectMembership.objects.filter(user=request.user, project=project).exists()
+    
+class IsOwnerOrProjectManager(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return True
+        
+        if obj.user == request.user:
+            return True
+        
+        return ProjectMembership.objects.filter(
+            user=request.user,
+            project=obj.task.project,
+            role_in_project="Manager"
+        ).exists()
