@@ -74,7 +74,7 @@ export default function Projects() {
       fetchProjects();
     } catch (error) {
       console.log(error.response?.data || error.message);
-      alert("Project creation failed");
+      alert("Project creation failed. You are not a Manager or Admin, so you cannot create a project.");
     }
   };
 

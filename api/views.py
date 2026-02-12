@@ -189,7 +189,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ["create"]:
-            return [IsAuthenticated()]
+            return [IsAdminUser()]
         
         if self.action in ["update", "partial_update", "archive", "reactivate", "members", "timesheet_summary"]:
             return [IsAuthenticated(), IsProjectManagerOrAdmin()]
