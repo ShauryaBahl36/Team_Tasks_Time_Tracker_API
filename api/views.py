@@ -126,6 +126,18 @@ class GetProjectAPIView(APIView):
             'projects': serializer.data,
         })
     
+class MeAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(
+            {
+                "id": request.user.id,
+                "username": request.user.username,
+                "is_staff": request.user.is_staff,
+            }
+        )
+    
 class GetProjectMembershipAPIView(APIView):
     def get(self, request):
         project_membership = ProjectMembership.objects.exclude(role_in_project="Member")

@@ -6,6 +6,7 @@ export default function Projects() {
 
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [user, setUser] = useState(null);
 
   const [loading, setLoading] = useState(false);
 
@@ -56,7 +57,22 @@ export default function Projects() {
     }
   };
 
+  const fetchUser = async () => {
+    try {
+        const response = await axios.get("http://localhost:8000/me/", {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        });
+
+        setUser(response.data);
+    } catch (error) {
+        console.log(error.response?.data || error.message);
+    }
+  };
+
   useEffect(() => {
+    fetchUser();
     fetchProjects();
   }, []);
 
@@ -186,36 +202,40 @@ export default function Projects() {
       <hr />
 
       {/* Create Project */}
-      <h3>Create Project</h3>
-      <div style={{ display: "flex", flexDirection: "column", width: "300px" }}>
-        <input
-          type="text"
-          placeholder="Project Name"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-        />
+      {user?.is_staff && (
+        <>
+        <h3>Create Project</h3>
+        <div style={{ display: "flex", flexDirection: "column", width: "300px" }}>
+            <input
+            type="text"
+            placeholder="Project Name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
 
-        <input
-          type="text"
-          placeholder="Project Code"
-          value={formData.code}
-          onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-        />
+            <input
+            type="text"
+            placeholder="Project Code"
+            value={formData.code}
+            onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+            />
 
-        <textarea
-          placeholder="Description"
-          value={formData.description}
-          onChange={(e) =>
-            setFormData({ ...formData, description: e.target.value })
-          }
-        />
+            <textarea
+            placeholder="Description"
+            value={formData.description}
+            onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+            }
+            />
 
-        <button onClick={handleCreateProject} style={{ marginTop: "10px" }}>
-          Create Project
-        </button>
-      </div>
+            <button onClick={handleCreateProject} style={{ marginTop: "10px" }}>
+            Create Project
+            </button>
+        </div>
 
-      <hr />
+        <hr />
+        </>
+      )}
 
       {/* Project List */}
       <h3>My Projects</h3>
