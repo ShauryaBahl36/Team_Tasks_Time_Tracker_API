@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry
 from api.serializers import ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer
-from api.permissions import IsAdminUserRole, IsOwnerOrProjectManager
+from api.permissions import IsAdminUserRole, IsOwnerOrProjectManager, IsProjectManagerOrAdmin
 from api.filters import TimeEntryFilter
 from rest_framework.views import APIView
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -15,6 +15,8 @@ from django.utils.encoding import force_str, force_bytes
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from rest_framework.generics import CreateAPIView
+from django.utils.timezone import now
+from django.db.models import Sum, F, ExpressionWrapper, DurationField
 # # Create your views here.
 
 # class RegisterAPIView(APIView):
@@ -133,6 +135,200 @@ class GetProjectMembershipAPIView(APIView):
             'role': role
         })
         return Response(serializer.data)
+    
+class ProjectViewSet(viewsets.ModelViewSet):
+    serializer_class = ProjectSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        # Admin sees all
+        if user.is_staff:
+            return Project.objects.all()
+        
+        # Member sees only projects they belong to
+        return Project.objects.filter(
+            projectmembership__user=user
+        ).distinct()
+    
+    def perform_create(self, serializer):
+        project = serializer.save(created_by=self.request.user)
+
+        # creator becomes Manager automatically
+        ProjectMembership.objects.create(
+            user=self.request.user,
+            project=project,
+            role_in_project="Manager"
+        )
+
+    def update(self, request, *args, **kwargs):
+        project = self.get_object()
+
+        # prevent editing archived projects
+        if project.archived_at is not None:
+            return Response(
+                {"error": "Archived project canot be edited. Reactivate first."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        return super().update(request, *args, **kwargs)
+    
+    def partial_update(self, request, *args, **kwargs):
+        project = self.get_object()
+
+        # prevent editing archived projects
+        if project.archived_at is not None:
+            return Response(
+                {"error": "Archived project cannot be edited. Reactivate first. "},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        return super().partial_update(request, *args, **kwargs)
+    
+    def get_permissions(self):
+        if self.action in ["create"]:
+            return [IsAuthenticated()]
+        
+        if self.action in ["update", "partial_update", "archive", "reactivate", "members", "timesheet_summary"]:
+            return [IsAuthenticated(), IsProjectManagerOrAdmin()]
+        
+        return [IsAuthenticated()]
+    
+    @action(detail=True, methods=["POST"])
+    def archive(self, request, pk=None):
+        project = self.get_object()
+
+        if project.archived_at is not None:
+            return Response(
+                {
+                    "message": "Project already archived"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        project.archived_at = now()
+        project.save()
+
+        return Response(
+            {
+                "message": "Project archived successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=["POST"])
+    def reactivate(self, request, pk=None):
+        project = self.get_object()
+
+        if project.archived_at is None:
+            return Response(
+                {
+                    "message": "Project is already active"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        project.archived_at = None
+        project.save()
+
+        return Response(
+            {
+                "message": "Project reactivated successfully"
+            },
+            status=status.HTTP_200_OK
+        )
+    
+    @action(detail=True, methods=["POST"])
+    def members(self, request, pk=None):
+        project = self.get_object()
+
+        user_id = request.data.get("user_id")
+        action_type = request.data.get("action")
+        role = request.data.get("role", "Member")
+
+        if not user_id or not action_type:
+            return Response(
+                {
+                    "error": "user_id and action are required"
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if action_type == "add":
+            membership, created = ProjectMembership.objects.get_or_create(
+                user_id=user_id,
+                project=project,
+                defaults={"role_in_project": role}
+            )
+
+            if not created:
+                membership.role_in_project = role
+                membership.save()
+
+            return Response(
+                {
+                    "message": "Member added/updated successfully"
+                },
+                status=status.HTTP_200_OK
+            )
+        elif action_type == "remove":
+            ProjectMembership.objects.filter(user_id=user_id, project=project).delete()
+            return Response(
+                {
+                    "error": "Invalid action. Use add/remove"
+                },
+                status=status.HTTP_200_OK
+            )
+        
+        @action(detail=True, methods=["GET"], url_path="timesheet/summary")
+        def timesheet_summary(self, request, pk=None):
+            project = self.get_object()
+
+            from_date = request.query_params.get("from")
+            to_date = request.query_params.get("to")
+
+            if not from_date or not to_date:
+                return Response(
+                    {
+                        "error": "from and to query params are required"
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            entries = TimeEntry.objects.filter(
+                task__project=project,
+                start_time__date__gte=from_date,
+                start_time__date__lte=to_date
+            )
+
+            duration_expr = ExpressionWrapper(
+                F("end_time") - F("start_time"),
+                output_field=DurationField()
+            )
+
+            total_duration = entries.annotate(
+                duration=duration_expr
+            ).aggregate(total=Sum("duration"))["total"]
+
+            billable_duration = entries.filter(billable=True).annotate(
+                duration=duration_expr
+            ).aggregate(total=Sum("duration"))["total"]
+
+            return Response(
+                {
+                    "project_id": project.id,
+                    "project_name": project.name,
+                    "from": from_date,
+                    "to": to_date,
+                    "total_logged_time": str(total_duration) if total_duration else "0:00:00",
+                    "billable_time": str(billable_duration) if billable_duration else "0:00:00",
+                    "total_entries": entries.count(),
+                },
+                status=200
+            )
+
+
     
 class TimeEntryViewSet(viewsets.ModelViewSet):
     # queryset = TimeEntry.objects.all()

@@ -2,11 +2,12 @@ import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom';
 import Tasks from '../components/Tasks.jsx';
 import TimeEntries from '../components/Time_Entry.jsx';
+import Projects from "../components/Projects.jsx";
 
 export default function Home() {
     const navigate = useNavigate();
 
-    const [activeTab, setActiveTab] = useState("tasks");
+    const [activeTab, setActiveTab] = useState("projects");
 
     function handleLogout() {
         localStorage.removeItem("access");
@@ -26,6 +27,19 @@ export default function Home() {
                 borderRadius: "8px",
                 marginBottom: "20px",
             }}>
+                <button
+                onClick={() => setActiveTab("projects")}
+                style={{
+                    padding: "8px 16px",
+                    border: "none",
+                    cursor: "pointer",
+                    borderRadius: "6px",
+                    backgroundColor: activeTab === "projects" ? "#007bff" : "#ddd",
+                    color: activeTab === "projects" ? "white" : "black",
+                }}
+                >
+                Projects
+                </button>
                 <button 
                 onClick={()=> setActiveTab("tasks")}
                 style={{
@@ -55,6 +69,7 @@ export default function Home() {
                 <button onClick={handleLogout}>Logout</button>
             </nav>
 
+            {activeTab === "projects" && <Projects />}
             {activeTab == "tasks" && <Tasks />}
             {activeTab == "timeentries" && <TimeEntries />}
         </div>

@@ -19,9 +19,23 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 class ProjectSerializer(serializers.ModelSerializer):
+    is_archived = serializers.SerializerMethodField()
+
     class Meta:
         model = Project
-        fields = '__all__'
+        fields = [
+            "id", 
+            "name", 
+            "code", 
+            "description", 
+            "archived_at", 
+            "created_by", 
+            "is_archived"
+        ]
+        read_only_fields = ["created_by", "archived_at"]
+
+    def get_is_archived(self, obj):
+        return obj.archived_at is not None
 
     def update(self, instance, validated_data):
         if instance.archived_at is not None:
@@ -33,9 +47,16 @@ class ProjectSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 class ProjectMembershipSerializer(serializers.ModelSerializer):
+    user_username = serializers.CharField(source="user.username", read_only=True)
     class Meta:
         model = ProjectMembership
-        fields = '__all__'
+        fields = [
+            "id", 
+            "user", 
+            "user_username", 
+            "project", 
+            "role_in_project"
+        ]
 
 class TaskSerializer(serializers.ModelSerializer):
     class Meta:

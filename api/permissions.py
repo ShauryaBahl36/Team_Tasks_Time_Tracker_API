@@ -1,4 +1,4 @@
-from .models import ProjectMembership, Task
+from api.models import ProjectMembership, Task
 from rest_framework import permissions
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
@@ -28,5 +28,22 @@ class IsOwnerOrProjectManager(BasePermission):
         return ProjectMembership.objects.filter(
             user=request.user,
             project=obj.task.project,
+            role_in_project="Manager"
+        ).exists()
+    
+class IsAdminOrManager(BasePermission):
+    def has_permission(self, request, view):
+        if request.user.is_staff:
+            return True
+        return True
+    
+class IsProjectManagerOrAdmin(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        if request.user.is_staff:
+            return True
+        
+        return ProjectMembership.objects.filter(
+            user=request.user,
+            project=obj,
             role_in_project="Manager"
         ).exists()

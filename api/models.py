@@ -50,6 +50,9 @@ class ProjectMembership(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     role_in_project = models.CharField(max_length=20, choices=RoleChoices.choices, default=RoleChoices.MEMBER)
 
+    class Meta:
+        unique_together = ("user", "project")
+
 class Task(models.Model):
     class StatusChoices(models.TextChoices):
         TODO = 'To-Do'
