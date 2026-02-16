@@ -6,12 +6,13 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser, DjangoModel
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry
-from api.serializers import ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer
+from api.serializers import ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer, UserListSerializer
 from api.permissions import IsAdminUserRole, IsOwnerOrProjectManager, IsProjectManagerOrAdmin
 from api.filters import TimeEntryFilter
 from rest_framework.views import APIView
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.utils.encoding import force_str, force_bytes
+from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from rest_framework.generics import CreateAPIView
@@ -28,6 +29,14 @@ from django.db.models import Sum, F, ExpressionWrapper, DurationField
 #             serializer.save()
 #             return Response({"message": "User registered successfully"}, status=status.HTTP_201_CREATED)
 #         return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+
+class UserListAPIView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.all().order_by("-date_joined")
+        serializer = UserListSerializer(users, many=True)
+        return Response(serializer.data)
     
 class RegisterAPIView(CreateAPIView):  # Changed from APIView to CreateAPIView
     serializer_class = RegisterSerializer
@@ -267,6 +276,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User does not exist"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
         if action_type == "add":
             membership, created = ProjectMembership.objects.get_or_create(
                 user_id=user_id,
@@ -292,6 +309,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_200_OK
             )
+        
+        return Response(
+            {"error": "Invalid action. Use add/remove"}, status=status.HTTP_400_BAD_REQUEST
+        )
         
         @action(detail=True, methods=["GET"], url_path="timesheet/summary")
         def timesheet_summary(self, request, pk=None):

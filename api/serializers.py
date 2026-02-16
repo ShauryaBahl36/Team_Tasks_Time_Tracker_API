@@ -1,8 +1,6 @@
 from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry
 from rest_framework import serializers
 
-
-
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
 
@@ -17,9 +15,23 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
         )
         return user
+    
+class UserListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "is_staff",
+            "is_active",
+            "date_joined"
+        ]
+
 
 class ProjectSerializer(serializers.ModelSerializer):
     is_archived = serializers.SerializerMethodField()
+    my_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -30,12 +42,29 @@ class ProjectSerializer(serializers.ModelSerializer):
             "description", 
             "archived_at", 
             "created_by", 
-            "is_archived"
+            "is_archived",
+            "my_role"
         ]
         read_only_fields = ["created_by", "archived_at"]
 
     def get_is_archived(self, obj):
         return obj.archived_at is not None
+    
+    def get_my_role(self, obj):
+        request = self.context.get("request")
+
+        if not request or not request.user.is_authenticated:
+            return None
+        
+        membership = ProjectMembership.objects.filter(
+            user=request.user,
+            project=obj
+        ).first()
+
+        if membership:
+            return membership.role_in_project
+        
+        return None
 
     def update(self, instance, validated_data):
         if instance.archived_at is not None:

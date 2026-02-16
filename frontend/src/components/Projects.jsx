@@ -32,6 +32,8 @@ export default function Projects() {
 
   const [summaryResult, setSummaryResult] = useState(null);
 
+  const canManageProject = user?.is_staff || selectedProject?.my_role === "Manager";
+
   // Fetch all projects
   const fetchProjects = async () => {
     try {
@@ -291,76 +293,88 @@ export default function Projects() {
                 <h3 style={{ color: "#60a5fa" }}>Selected Project: {selectedProject.name}</h3>
 
                 {/* Archive / Reactivate */}
-                {selectedProject.is_archived ? (
-                  <button onClick={() => handleReactivate(selectedProject.id)}>
-                    Reactivate Project
-                  </button>
-                ) : (
-                  <button onClick={() => handleArchive(selectedProject.id)}>
-                    Archive Project
-                  </button>
+                {canManageProject && (
+                    <>
+                        {selectedProject.is_archived ? (
+                        <button onClick={() => handleReactivate(selectedProject.id)}>
+                            Reactivate Project
+                        </button>
+                        ) : (
+                        <button onClick={() => handleArchive(selectedProject.id)}>
+                            Archive Project
+                        </button>
+                        )}
+                    </>
                 )}
 
                 <hr />
 
                 {/* Member Add/Remove */}
-                <h4>Manage Members</h4>
-                <input
-                  type="number"
-                  placeholder="User ID"
-                  value={memberData.user_id}
-                  onChange={(e) =>
-                    setMemberData({ ...memberData, user_id: e.target.value })
-                  }
-                />
+                {canManageProject && (
+                    <>
+                        <h4>Manage Members</h4>
+                        <input
+                        type="number"
+                        placeholder="User ID"
+                        value={memberData.user_id}
+                        onChange={(e) =>
+                            setMemberData({ ...memberData, user_id: e.target.value })
+                        }
+                        />
 
-                <select
-                  value={memberData.action}
-                  onChange={(e) =>
-                    setMemberData({ ...memberData, action: e.target.value })
-                  }
-                >
-                  <option value="add">Add</option>
-                  <option value="remove">Remove</option>
-                </select>
+                        <select
+                        value={memberData.action}
+                        onChange={(e) =>
+                            setMemberData({ ...memberData, action: e.target.value })
+                        }
+                        >
+                        <option value="add">Add</option>
+                        <option value="remove">Remove</option>
+                        </select>
 
-                <select
-                  value={memberData.role}
-                  onChange={(e) =>
-                    setMemberData({ ...memberData, role: e.target.value })
-                  }
-                >
-                  <option value="Member">Member</option>
-                  <option value="Manager">Manager</option>
-                </select>
+                        <select
+                        value={memberData.role}
+                        onChange={(e) =>
+                            setMemberData({ ...memberData, role: e.target.value })
+                        }
+                        >
+                        <option value="Member">Member</option>
+                        <option value="Manager">Manager</option>
+                        </select>
 
-                <button onClick={handleMemberAction}>Submit</button>
+                        <button onClick={handleMemberAction}>Submit</button>
+                    </>
+                )}
 
                 <hr />
 
                 {/* Timesheet Summary */}
-                <h4>Timesheet Summary</h4>
-                <label>From:</label>
-                <input
-                  type="date"
-                  value={summaryFilters.from}
-                  onChange={(e) =>
-                    setSummaryFilters({ ...summaryFilters, from: e.target.value })
-                  }
-                />
+                {canManageProject && (
+                    <>
+                        <h4>Timesheet Summary</h4>
+                        <label>From:</label>
+                        <input
+                        type="date"
+                        value={summaryFilters.from}
+                        onChange={(e) =>
+                            setSummaryFilters({ ...summaryFilters, from: e.target.value })
+                        }
+                        />
 
-                <label>To:</label>
-                <input
-                  type="date"
-                  value={summaryFilters.to}
-                  onChange={(e) =>
-                    setSummaryFilters({ ...summaryFilters, to: e.target.value })
-                  }
-                />
+                        <label>To:</label>
+                        <input
+                        type="date"
+                        value={summaryFilters.to}
+                        onChange={(e) =>
+                            setSummaryFilters({ ...summaryFilters, to: e.target.value })
+                        }
+                        />
 
-                <button onClick={fetchTimesheetSummary}>
-                  Get Summary
-                </button>
+                        <button onClick={fetchTimesheetSummary}>
+                        Get Summary
+                        </button>
+                    </>
+                )}
 
                 {summaryResult && (
                   <div

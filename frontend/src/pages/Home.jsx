@@ -1,13 +1,18 @@
-import React, { useState } from 'react'
+import React, { useEffectEvent, useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom';
 import Tasks from '../components/Tasks.jsx';
 import TimeEntries from '../components/Time_Entry.jsx';
 import Projects from "../components/Projects.jsx";
+import Users from "../components/Users.jsx";
+import axios from 'axios';
 
 export default function Home() {
     const navigate = useNavigate();
 
+    const token = localStorage.getItem("access");
+
     const [activeTab, setActiveTab] = useState("projects");
+    const [user, setUser] = useState(null);
 
     function handleLogout() {
         localStorage.removeItem("access");
@@ -15,6 +20,28 @@ export default function Home() {
 
         navigate("/");
     }
+
+    const fetchUser = async () => {
+    try {
+      const response = await axios.get("http://127.0.0.1:8000/me/", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      setUser(response.data);
+    } catch (error) {
+      console.log(error.response?.data || error.message);
+    }
+  };
+
+  const fetchAllUsers = useEffectEvent(()=> {
+    fetchUser();
+  }, []);
+
+  useEffect(() => {
+    fetchAllUsers();
+  }, []);
 
     return (
         <div style={{ padding: "20px" }}>
@@ -66,12 +93,25 @@ export default function Home() {
                 }}>
                     Time Entries
                 </button>
+                {user?.is_staff && (
+                    <button onClick={() => setActiveTab("users")} style={{
+                    padding: "8px 16px",
+                    border: "none",
+                    cursor: "pointer",
+                    borderRadius: "6px",
+                    backgroundColor: activeTab == "users" ? "#007bff" : "#ddd",
+                    color: activeTab == "users" ? "white": "black",
+                }}>
+                        Users
+                    </button>
+                )}
                 <button onClick={handleLogout}>Logout</button>
             </nav>
 
             {activeTab === "projects" && <Projects />}
             {activeTab == "tasks" && <Tasks />}
             {activeTab == "timeentries" && <TimeEntries />}
+            {activeTab === "users" && user?.is_staff && <Users />}
         </div>
     );
 }

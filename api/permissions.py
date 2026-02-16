@@ -47,3 +47,7 @@ class IsProjectManagerOrAdmin(BasePermission):
             project=obj,
             role_in_project="Manager"
         ).exists()
+    
+class IsRoleAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.user_role == "Admin"

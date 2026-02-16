@@ -1,10 +1,11 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from api.views import TasksViewSet, TimeEntryViewSet, GetProjectAPIView
+from api.views import TasksViewSet, TimeEntryViewSet, GetProjectAPIView, UserListAPIView
 from . import views
 
 urlpatterns = [
     # path('projects/', views.GetProjectAPIView.as_view()),
+    path("users/", UserListAPIView.as_view(), name="user-list"),
 ]
 
 router = DefaultRouter()
