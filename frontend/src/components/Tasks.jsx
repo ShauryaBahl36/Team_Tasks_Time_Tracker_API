@@ -168,6 +168,7 @@ export default function Tasks() {
           <option value="Done">Done</option>
         </select>
 
+        <label>Due Date</label>
         <input
           type="date"
           value={formData.due_date}
@@ -261,81 +262,194 @@ function TaskCard({ task, onDelete, onUpdate }) {
     setEditMode(false);
   };
 
+  const calculateDaysLeft = (dueDate) => {
+    if (!dueDate) return null;
+
+    const today = new Date();
+    const due = new Date(dueDate);
+
+    // remove time part for accurate day calculation
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+
+    const diffTime = due - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays;
+    };
+
+    const daysLeft = calculateDaysLeft(task.due_date);
+
+
   return (
-    <div style={{ border: "1px solid gray", padding: "15px", marginBottom: "10px", borderRadius: "8px" }}>
-      {editMode ? (
+    <div
+        style={{
+        border: "1px solid gray",
+        padding: "15px",
+        marginBottom: "10px",
+        borderRadius: "8px",
+        }}
+    >
+        {editMode ? (
         <>
-          <input
+            <input
             type="text"
             value={updatedTask.title}
             onChange={(e) =>
-              setUpdatedTask({ ...updatedTask, title: e.target.value })
+                setUpdatedTask({ ...updatedTask, title: e.target.value })
             }
-          />
+            />
 
-          <textarea
+            <textarea
             value={updatedTask.description}
             onChange={(e) =>
-              setUpdatedTask({ ...updatedTask, description: e.target.value })
+                setUpdatedTask({ ...updatedTask, description: e.target.value })
             }
-          />
+            />
 
-          {/* Priority Dropdown */}
-          <label><b>Priority:</b></label>
-          <select
+            {/* Priority Dropdown */}
+            <label>
+            <b>Priority:</b>
+            </label>
+            <select
             value={updatedTask.priority}
             onChange={(e) =>
-              setUpdatedTask({ ...updatedTask, priority: e.target.value })
+                setUpdatedTask({ ...updatedTask, priority: e.target.value })
             }
-          >
+            >
             <option value="Low">Low</option>
             <option value="Medium">Medium</option>
             <option value="High">High</option>
-          </select>
+            </select>
 
-          <br /><br />
+            <br />
+            <br />
 
-          {/* Status Dropdown with Workflow Guard */}
-          <label><b>Status:</b></label>
-          <select
+            {/* Status Dropdown with Workflow Guard */}
+            <label>
+            <b>Status:</b>
+            </label>
+            <select
             value={updatedTask.status}
             onChange={(e) =>
-              setUpdatedTask({ ...updatedTask, status: e.target.value })
+                setUpdatedTask({ ...updatedTask, status: e.target.value })
             }
-          >
-            {/* Current status always allowed */}
+            >
             <option value={task.status}>{task.status}</option>
 
-            {/* Only show next valid statuses */}
             {allowedNextStatuses.map((status) => (
-              <option key={status} value={status}>
+                <option key={status} value={status}>
                 {status}
-              </option>
+                </option>
             ))}
-          </select>
+            </select>
 
-          {allowedNextStatuses.length === 0 && (
+            {allowedNextStatuses.length === 0 && (
             <p style={{ color: "red" }}>
-              Task is already Done. Status cannot be changed.
+                Task is already Done. Status cannot be changed.
             </p>
-          )}
+            )}
 
-          <br />
+            <br />
+            <br />
 
-          <button onClick={handleSave}>Save</button>
-          <button onClick={() => setEditMode(false)}>Cancel</button>
+            {/* Due Date */}
+            <p>
+                <b>Due Date:</b>{" "}
+                {task.due_date ? (
+                    <>
+                    {task.due_date}{" "}
+                    {daysLeft !== null && (
+                        daysLeft > 0 ? (
+                        <span style={{ color: "lightgreen" }}>
+                            (Due in {daysLeft} days)
+                        </span>
+                        ) : daysLeft === 0 ? (
+                        <span style={{ color: "yellow" }}>
+                            (Due Today)
+                        </span>
+                        ) : (
+                        <span style={{ color: "red" }}>
+                            (Overdue by {Math.abs(daysLeft)} days)
+                        </span>
+                        )
+                    )}
+                    </>
+                ) : (
+                    <span style={{ color: "orange" }}>Not Set</span>
+                )}
+            </p>
+
+            <br />
+            <br />
+
+            {/* Estimate Hours */}
+            <label>
+            <b>Estimate Hours:</b>
+            </label>
+            <input
+            type="number"
+            value={updatedTask.estimate_hours || ""}
+            onChange={(e) =>
+                setUpdatedTask({ ...updatedTask, estimate_hours: e.target.value })
+            }
+            />
+
+            <br />
+            <br />
+
+            <button onClick={handleSave}>Save</button>
+            <button onClick={() => setEditMode(false)}>Cancel</button>
         </>
-      ) : (
+        ) : (
         <>
-          <h4>{task.title}</h4>
-          <p>{task.description}</p>
-          <p>
+            <h4>{task.title}</h4>
+            <p>{task.description}</p>
+
+            <p>
             <b>Status:</b> {task.status} | <b>Priority:</b> {task.priority}
-          </p>
-          <button onClick={() => setEditMode(true)}>Edit</button>
-          <button onClick={() => onDelete(task.id)}>Delete</button>
+            </p>
+
+            <p>
+                <b>Due Date:</b>{" "}
+                {task.due_date ? (
+                    <>
+                    {task.due_date}{" "}
+                    {daysLeft !== null && (
+                        daysLeft > 0 ? (
+                        <span style={{ color: "lightgreen" }}>
+                            (Due in {daysLeft} days)
+                        </span>
+                        ) : daysLeft === 0 ? (
+                        <span style={{ color: "yellow" }}>
+                            (Due Today)
+                        </span>
+                        ) : (
+                        <span style={{ color: "red" }}>
+                            (Overdue by {Math.abs(daysLeft)} days)
+                        </span>
+                        )
+                    )}
+                    </>
+                ) : (
+                    <span style={{ color: "orange" }}>Not Set</span>
+                )}
+            </p>
+
+            <p>
+                <b>Estimate Hours:</b>{" "}
+                {task.estimate_hours ? (
+                    <span>{task.estimate_hours} hrs</span>
+                ) : (
+                    <span style={{ color: "orange" }}>Not Set</span>
+                )}
+            </p>
+
+
+            <button onClick={() => setEditMode(true)}>Edit</button>
+            <button onClick={() => onDelete(task.id)}>Delete</button>
         </>
-      )}
+        )}
     </div>
-  );
+    );
 }
