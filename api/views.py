@@ -305,7 +305,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ProjectMembership.objects.filter(user_id=user_id, project=project).delete()
             return Response(
                 {
-                    "error": "Invalid action. Use add/remove"
+                    "error": "Member removed successfully."
                 },
                 status=status.HTTP_200_OK
             )
@@ -314,52 +314,52 @@ class ProjectViewSet(viewsets.ModelViewSet):
             {"error": "Invalid action. Use add/remove"}, status=status.HTTP_400_BAD_REQUEST
         )
         
-        @action(detail=True, methods=["GET"], url_path="timesheet/summary")
-        def timesheet_summary(self, request, pk=None):
-            project = self.get_object()
+    @action(detail=True, methods=["GET"], url_path="timesheet/summary")
+    def timesheet_summary(self, request, pk=None):
+        project = self.get_object()
 
-            from_date = request.query_params.get("from")
-            to_date = request.query_params.get("to")
+        from_date = request.query_params.get("from")
+        to_date = request.query_params.get("to")
 
-            if not from_date or not to_date:
-                return Response(
-                    {
-                        "error": "from and to query params are required"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            entries = TimeEntry.objects.filter(
-                task__project=project,
-                start_time__date__gte=from_date,
-                start_time__date__lte=to_date
-            )
-
-            duration_expr = ExpressionWrapper(
-                F("end_time") - F("start_time"),
-                output_field=DurationField()
-            )
-
-            total_duration = entries.annotate(
-                duration=duration_expr
-            ).aggregate(total=Sum("duration"))["total"]
-
-            billable_duration = entries.filter(billable=True).annotate(
-                duration=duration_expr
-            ).aggregate(total=Sum("duration"))["total"]
-
+        if not from_date or not to_date:
             return Response(
                 {
-                    "project_id": project.id,
-                    "project_name": project.name,
-                    "from": from_date,
-                    "to": to_date,
-                    "total_logged_time": str(total_duration) if total_duration else "0:00:00",
-                    "billable_time": str(billable_duration) if billable_duration else "0:00:00",
-                    "total_entries": entries.count(),
+                    "error": "from and to query params are required"
                 },
-                status=200
+                status=status.HTTP_400_BAD_REQUEST
             )
+        
+        entries = TimeEntry.objects.filter(
+            task__project=project,
+            start_time__date__gte=from_date,
+            start_time__date__lte=to_date
+        )
+
+        duration_expr = ExpressionWrapper(
+            F("end_time") - F("start_time"),
+            output_field=DurationField()
+        )
+
+        total_duration = entries.annotate(
+            duration=duration_expr
+        ).aggregate(total=Sum("duration"))["total"]
+
+        billable_duration = entries.filter(billable=True).annotate(
+            duration=duration_expr
+        ).aggregate(total=Sum("duration"))["total"]
+
+        return Response(
+            {
+                "project_id": project.id,
+                "project_name": project.name,
+                "from": from_date,
+                "to": to_date,
+                "total_logged_time": str(total_duration) if total_duration else "0:00:00",
+                "billable_time": str(billable_duration) if billable_duration else "0:00:00",
+                "total_entries": entries.count(),
+            },
+            status=200
+        )
 
 
     
