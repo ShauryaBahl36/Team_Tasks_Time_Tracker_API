@@ -4,8 +4,6 @@ __pycache__/
 *$py.class
 *.pyc
 .env
-.env.*
-../.env
 
 # C extensions
 *.so
@@ -221,4 +219,4 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-../api.http/
+api.http
