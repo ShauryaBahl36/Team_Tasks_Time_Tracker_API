@@ -7,6 +7,11 @@ export default function TimeEntries() {
     const [entries, setEntries] = useState([]);
     const [loading, setLoading] = useState(false);
 
+    const [user, setUser] = useState(null);
+    const [projects, setProjects] = useState([]);
+    const [tasks, setTasks] = useState([]);
+    const [users, setUsers] = useState([]);
+
     const [filters, setFilters] = useState({
         project: "",
         task: "",
@@ -24,6 +29,81 @@ export default function TimeEntries() {
         notes: "",
         billable: true
     });
+
+    const canViewUsers = user?.is_staff;
+
+    const fetchUser = async () => {
+      try {
+        const response = await axios.get("http://localhost:8000/me/", {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+        });
+
+        setUser(response.data);
+
+        if (response.data.is_staff) {
+          fetchUsers();
+        }
+      } catch (error) {
+        console.log(error.response?.data || error.message);
+      }
+    };
+
+    const fetchUsers = async () => {
+      try {
+        const response = await axios.get("http://localhost:8000/url/users/", {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+        });
+
+        if (response.data.results) {
+          setUsers(response.data.results);
+        } else {
+          setUsers(response.data);
+        }
+      } catch (error) {
+        if (error.response?.status === 403) return;
+        console.log(error.response?.data || error.message);
+      }
+    };
+
+    const fetchProjects = async () => {
+      try {
+        const response = await axios.get("http://localhost:8000/url/projects/", {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+        });
+
+        if (response.data.results) {
+          setProjects(response.data.results);
+        } else {
+          setProjects(response.data);
+        }
+      } catch (error) {
+        console.log(error.response?.data || error.message);
+      }
+    };
+
+    const fetchTasks = async () => {
+      try {
+        const response = await axios.get("http://localhost:8000/url/tasks/", {
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+        });
+
+        if (response.data.results) {
+          setTasks(response.data.results);
+        } else {
+          setTasks(response.data);
+        }
+      } catch (error) {
+        console.log(error.response?.data || error.message);
+      }
+    };
 
     const fetchEntries = async () => {
         try {
@@ -60,7 +140,13 @@ export default function TimeEntries() {
     };
 
     useEffect(() => {
-        fetchEntries();
+      const loadData = async () => {
+        await fetchUser();
+        await fetchProjects();
+        await fetchTasks();
+        await fetchEntries();
+      }
+        loadData();
     }, []);
 
     const handleApplyFilters = () => {
@@ -116,26 +202,43 @@ export default function TimeEntries() {
       <h3>Filters</h3>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-        <input
-          type="number"
-          placeholder="Project ID"
+        <select
           value={filters.project}
           onChange={(e) => setFilters({ ...filters, project: e.target.value })}
-        />
+        >
+          <option value="">All Projects</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
 
-        <input
-          type="number"
-          placeholder="Task ID"
+        <select
           value={filters.task}
           onChange={(e) => setFilters({ ...filters, task: e.target.value })}
-        />
+        >
+          <option value="">All Tasks</option>
+          {tasks.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.title}
+            </option>
+          ))}
+        </select>
 
-        <input
-          type="number"
-          placeholder="User ID"
-          value={filters.user}
-          onChange={(e) => setFilters({ ...filters, user: e.target.value })}
-        />
+        {canViewUsers && (
+          <select
+            value={filters.user}
+            onChange={(e) => setFilters({ ...filters, user: e.target.value })}
+          >
+            <option value="">All Users</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.username}
+              </option>
+            ))}
+          </select>
+        )}
 
         <select
           value={filters.billable}
@@ -179,12 +282,17 @@ export default function TimeEntries() {
       <h3>Create Time Entry</h3>
 
       <div style={{ display: "flex", flexDirection: "column", width: "300px" }}>
-        <input
-          type="number"
-          placeholder="Task ID"
+        <select
           value={formData.task}
           onChange={(e) => setFormData({ ...formData, task: e.target.value })}
-        />
+        >
+          <option value="">Select Task</option>
+          {tasks.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.title}
+            </option>
+          ))}
+        </select>
 
         <label>Start Time:</label>
         <input

@@ -5,6 +5,7 @@ export default function Projects() {
   const token = localStorage.getItem("access");
 
   const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [user, setUser] = useState(null);
 
@@ -59,6 +60,28 @@ export default function Projects() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const response = await axios.get("http://localhost:8000/url/users/", {
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+      });
+
+      if (response.data.results) {
+        setUsers(response.data.results);
+      } else {
+        setUsers(response.data);
+      }
+    } catch (error) {
+      if (error.response?.status === 403) {
+        return;
+      }
+      console.log(error.response?.data || error.message);
+      alert("Failed to fetch users list");
+    }
+  };
+
   const fetchUser = async () => {
     try {
         const response = await axios.get("http://localhost:8000/me/", {
@@ -68,14 +91,23 @@ export default function Projects() {
         });
 
         setUser(response.data);
+
+        if (response.data.is_staff) {
+          fetchUsers();
+        }
     } catch (error) {
         console.log(error.response?.data || error.message);
     }
   };
 
   useEffect(() => {
-    fetchUser();
-    fetchProjects();
+    const loadData = async () => {
+      fetchUser();
+      fetchUsers();
+      fetchProjects();
+    };
+
+    loadData();
   }, []);
 
   // Create project
@@ -142,6 +174,11 @@ export default function Projects() {
   const handleMemberAction = async () => {
     if (!selectedProject) {
       alert("Please select a project first");
+      return;
+    }
+
+    if (!memberData.user_id) {
+      alert("Please select a user");
       return;
     }
 
@@ -313,14 +350,29 @@ export default function Projects() {
                 {canManageProject && (
                     <>
                         <h4>Manage Members</h4>
-                        <input
+                        {/* <input
                         type="number"
                         placeholder="User ID"
                         value={memberData.user_id}
                         onChange={(e) =>
                             setMemberData({ ...memberData, user_id: e.target.value })
                         }
-                        />
+                        /> */}
+                        <select
+                          value={memberData.user_id}
+                          onChange={(e) =>
+                            setMemberData({ ...memberData, user_id: e.target.value })
+                          }
+                        >
+                          <option value="">Select User</option>
+
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.username} ({u.user_role})
+                            </option>
+                          ))}
+                        </select>
+
 
                         <select
                         value={memberData.action}

@@ -110,30 +110,30 @@ class ResetPasswordAPIView(APIView):
         return Response({"message": "Password reset successful"})
         
     
-class StoreProjectAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+# class StoreProjectAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        serializer = ProjectSerializer(data=request.data)
-        if serializer.is_valid():
-            project = serializer.save(created_by=request.user)
+#     def post(self, request):
+#         serializer = ProjectSerializer(data=request.data)
+#         if serializer.is_valid():
+#             project = serializer.save(created_by=request.user)
 
-            ProjectMembership.objects.create(user=request.user, project=project, role_in_project="Manager")
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+#             ProjectMembership.objects.create(user=request.user, project=project, role_in_project="Manager")
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#         else:
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-class GetProjectAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+# class GetProjectAPIView(APIView):
+#     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
-        projects = Project.objects.all()
-        serializer = ProjectSerializer(projects, many=True)
-        return Response({
-            'total_projects': projects.count(),
-            'projects': serializer.data,
-        })
+#     def get(self, request):
+#         projects = Project.objects.all()
+#         serializer = ProjectSerializer(projects, many=True)
+#         return Response({
+#             'total_projects': projects.count(),
+#             'projects': serializer.data,
+#         })
     
 class MeAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -147,15 +147,15 @@ class MeAPIView(APIView):
             }
         )
     
-class GetProjectMembershipAPIView(APIView):
-    def get(self, request):
-        project_membership = ProjectMembership.objects.exclude(role_in_project="Member")
-        role = ProjectMembership.role_in_project
-        serializer = ProjectSerializer({
-            'Project Membership': project_membership,
-            'role': role
-        })
-        return Response(serializer.data)
+# class GetProjectMembershipAPIView(APIView):
+#     def get(self, request):
+#         project_membership = ProjectMembership.objects.exclude(role_in_project="Member")
+#         role = ProjectMembership.role_in_project
+#         serializer = ProjectSerializer({
+#             'Project Membership': project_membership,
+#             'role': role
+#         })
+#         return Response(serializer.data)
     
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
@@ -360,7 +360,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
             },
             status=200
         )
-
 
     
 class TimeEntryViewSet(viewsets.ModelViewSet):

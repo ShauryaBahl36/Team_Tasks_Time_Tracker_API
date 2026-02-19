@@ -1,6 +1,6 @@
 from rest_framework.routers import DefaultRouter
 from django.urls import path
-from api.views import TasksViewSet, TimeEntryViewSet, GetProjectAPIView, UserListAPIView
+from api.views import UserListAPIView
 from . import views
 
 urlpatterns = [

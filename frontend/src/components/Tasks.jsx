@@ -6,6 +6,7 @@ export default function Tasks() {
 
   const [tasks, setTasks] = useState([]);
   const [search, setSearch] = useState("");
+  const [projects, setProjects] = useState([]);
 
   const [formData, setFormData] = useState({
     project: "",
@@ -39,11 +40,29 @@ export default function Tasks() {
       alert("Failed to fetch tasks");
     }
   };
-
-  const fetchTasksEvent = useEffectEvent(() => {
-    fetchTasksNormal();
-  });
-
+  const fetchProjects = async () => {
+      try {
+          const response = await axios.get("http://localhost:8000/url/projects/", {
+              headers: {
+                  Authorization: `Bearer ${token}`
+                },
+            });
+            
+            if (response.data.results) {
+                setProjects(response.data.results);
+            } else {
+                setProjects(response.data);
+            }
+        } catch (error) {
+            console.log(error.response?.data || error.message);
+            alert("Failed to fetch projects")
+        }
+  };
+    const fetchTasksEvent = useEffectEvent(() => {
+        fetchTasksNormal();
+        fetchProjects();
+    });
+    
   useEffect(() => {
     fetchTasksEvent();
   }, []);
@@ -55,6 +74,11 @@ export default function Tasks() {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (!formData.project) {
+        alert("Please select a project");
+        return;
+      }
 
       alert("Task Created successfully!");
 
@@ -126,12 +150,26 @@ export default function Tasks() {
       {/* Create Task Form */}
       <h3>Create Task</h3>
       <div style={{ display: "flex", flexDirection: "column", width: "300px" }}>
-        <input
+        {/* <input
           type="number"
           placeholder="Project ID"
           value={formData.project}
           onChange={(e) => setFormData({ ...formData, project: e.target.value })}
-        />
+        /> */}
+
+        <select
+        value={formData.project}
+        onChange={(e) => setFormData({ ...formData, project: e.target.value })}
+        >
+        <option value="">Select Project</option>
+
+        {projects.map((proj) => (
+            <option key={proj.id} value={proj.id}>
+            {proj.name} ({proj.code})
+            </option>
+        ))}
+        </select>
+
 
         <input
           type="text"
