@@ -47,13 +47,15 @@ export default function Projects() {
     try {
       setLoading(true);
 
-      const response = await axios.get(`http://127.0.0.1:8000/url/projects/?search=${search}&page=${page}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await axios.get(
+        `http://127.0.0.1:8000/url/projects/?search=${search}&page=${page}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      // handle pagination
       if (response.data.results) {
         setProjects(response.data.results);
         setCount(response.data.count);
@@ -61,13 +63,23 @@ export default function Projects() {
         setProjects(response.data);
         setCount(response.data.length);
       }
+
     } catch (error) {
+
+      // 🔥 HANDLE INVALID PAGE HERE
+      if (error.response?.data?.detail === "Invalid page.") {
+        setPage(1);   // Reset to page 1
+        return;
+      }
+
       console.log(error.response?.data || error.message);
       alert("Failed to fetch projects");
+
     } finally {
       setLoading(false);
     }
   };
+
 
   const fetchUsers = async () => {
     try {
@@ -267,86 +279,102 @@ export default function Projects() {
   };
 
   return (
-    <div style={{ 
-        padding: "20px",
-        backgroundColor: "#0f172a",
-        minHeight: "100vh",
-        color: "white", 
-    }}>
-      <h2>Projects Dashboard</h2>
+    <div className="space-y-8">
 
-      <hr />
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-blue-400">
+          Projects Dashboard
+        </h2>
+        <p className="text-slate-400 text-sm">
+          Manage projects, members and summaries
+        </p>
+      </div>
 
-      <Profile user={user} />
-
-      <hr />
+      {/* Profile */}
+      <div className="bg-slate-800 p-5 rounded-xl shadow-md">
+        <Profile user={user} />
+      </div>
 
       {/* Create Project */}
       {user?.is_staff && (
-        <>
-        <h3>Create Project</h3>
-        <div style={{ display: "flex", flexDirection: "column", width: "300px" }}>
+        <div className="bg-slate-800 p-6 rounded-xl shadow-md space-y-5">
+          <h3 className="text-lg font-semibold text-slate-300">
+            Create Project
+          </h3>
+
+          <div className="grid md:grid-cols-3 gap-4">
             <input
-            type="text"
-            placeholder="Project Name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              type="text"
+              placeholder="Project Name"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              className="input-field"
             />
 
             <input
-            type="text"
-            placeholder="Project Code"
-            value={formData.code}
-            onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+              type="text"
+              placeholder="Project Code"
+              value={formData.code}
+              onChange={(e) =>
+                setFormData({ ...formData, code: e.target.value })
+              }
+              className="input-field"
             />
 
             <textarea
-            placeholder="Description"
-            value={formData.description}
-            onChange={(e) =>
+              placeholder="Description"
+              value={formData.description}
+              onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
-            }
+              }
+              className="input-field"
+            />
+          </div>
+
+          <button
+            onClick={handleCreateProject}
+            className="btn-primary w-fit"
+          >
+            Create Project
+          </button>
+
+          {/* Bulk Upload */}
+          <div className="pt-4 border-t border-slate-700 space-y-3">
+            <h4 className="text-md font-medium text-slate-300">
+              Bulk Upload
+            </h4>
+
+            <input
+              type="file"
+              accept=".csv,.xlsx"
+              onChange={(e) => setUploadFile(e.target.files[0])}
+              className="text-slate-300"
             />
 
-            <button onClick={handleCreateProject} style={{ marginTop: "10px" }}>
-            Create Project
+            <button
+              onClick={handleBulkUpload}
+              className="btn-secondary w-fit"
+            >
+              Upload File
             </button>
+          </div>
         </div>
-
-        <hr />
-
-        <h3>Bulk Upload Projects</h3>
-
-        <input
-        type="file"
-        accept=".csv,.xlsx"
-        onChange={(e) => setUploadFile(e.target.files[0])}
-        />
-
-        <button onClick={handleBulkUpload} style={{ marginTop: "10px" }}>
-          Upload File
-        </button>
-        </>
       )}
 
-      {/* Project List */}
-      <h3>My Projects</h3>
-
-      <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+      {/* Search */}
+      <div className="flex flex-wrap gap-3 items-center">
         <input
           type="text"
-          placeholder="Search projects by name/code..."
+          placeholder="Search projects..."
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
             setPage(1);
           }}
-          style={{
-            padding: "8px",
-            borderRadius: "6px",
-            border: "1px solid gray",
-            width: "300px",
-          }}
+          className="input-field w-72"
         />
 
         <button
@@ -354,224 +382,269 @@ export default function Projects() {
             setPage(1);
             fetchProjects();
           }}
-          style={{
-            padding: "8px 14px",
-            borderRadius: "6px",
-            cursor: "pointer",
-          }}
+          className="btn-secondary"
         >
           Search
         </button>
       </div>
 
-      {loading ? (
-        <p>Loading projects...</p>
-      ) : projects.length === 0 ? (
-        <p>No projects found.</p>
-      ) : (
-        <div style={{ display: "flex", gap: "20px" }}>
-          {/* Projects Sidebar */}
-          <div style={{ width: "40%" }}>
-            {projects.map((project) => (
+      {/* Main Layout */}
+      <div className="grid lg:grid-cols-2 gap-8">
+
+        {/* Left Panel - Project List */}
+        <div className="space-y-4">
+
+          {loading ? (
+            <p className="text-slate-400">Loading projects...</p>
+          ) : projects.length === 0 ? (
+            <p className="text-slate-400">No projects found.</p>
+          ) : (
+            projects.map((project) => (
               <div
                 key={project.id}
                 onClick={() => {
                   setSelectedProject(project);
                   setSummaryResult(null);
                 }}
-                style={{
-                    padding: "16px",
-                    border: selectedProject?.id === project.id ? "2px solid #007bff" : "1px solid #444",
-                    marginBottom: "12px",
-                    cursor: "pointer",
-                    borderRadius: "10px",
-                    backgroundColor: selectedProject?.id === project.id ? "#1e293b" : "#111827",
-                    color: "white",
-                    boxShadow: "0px 2px 8px rgba(0,0,0,0.4)",
-                }}
+                className={`p-5 rounded-xl cursor-pointer transition border
+                  ${
+                    selectedProject?.id === project.id
+                      ? "border-blue-500 bg-slate-800"
+                      : "border-slate-700 bg-slate-800 hover:bg-slate-700"
+                  }`}
               >
-                <h4 style={{ margin: "0", fontSize: "18px", color: "#60a5fa" }}>{project.name}</h4>
-                <p style={{ margin: "6px 0", fontSize: "14px" }}>
-                  <b style={{ color: "#cbd5e1" }}>Code:</b> {project.code}
-                </p>
-                <p style={{ margin: "6px 0", fontSize: "14px", color: "#d1d5db" }}>{project.description}</p>
+                <h4 className="text-lg font-semibold text-blue-400">
+                  {project.name}
+                </h4>
 
-                <p style={{ margin: "8px 0", fontSize: "14px" }}>
-                  <b style={{ color: "#cbd5e1" }}>Status:</b>{" "}
-                  {project.is_archived ? (
-                    <span style={{ color: "red" }}>Archived</span>
-                  ) : (
-                    <span style={{ color: "green" }}>Active</span>
-                  )}
+                <p className="text-sm text-slate-400">
+                  Code: {project.code}
+                </p>
+
+                <p className="text-sm text-slate-300 mt-2">
+                  {project.description}
+                </p>
+
+                <span
+                  className={`inline-block mt-3 px-3 py-1 text-xs rounded-full
+                    ${
+                      project.is_archived
+                        ? "bg-red-500/20 text-red-400"
+                        : "bg-green-500/20 text-green-400"
+                    }`}
+                >
+                  {project.is_archived ? "Archived" : "Active"}
+                </span>
+              </div>
+            ))
+          )}
+
+          {/* Pagination */}
+          {projects.length > 0 && (
+            <div className="flex items-center justify-between pt-4">
+              <button
+                disabled={page === 1}
+                onClick={() => setPage(page - 1)}
+                className="btn-secondary disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <span className="text-sm text-slate-400">
+                Page {page} of {Math.ceil(count / pageSize)}
+              </span>
+
+              <button
+                disabled={page >= Math.ceil(count / pageSize)}
+                onClick={() => setPage(page + 1)}
+                className="btn-secondary disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          )}
+
+        </div>
+
+        {/* Right Panel - Selected Project */}
+        <div className="bg-slate-800 p-6 rounded-xl shadow-md space-y-6">
+
+          {selectedProject ? (
+            <>
+              <div>
+                <h3 className="text-xl font-semibold text-blue-400">
+                  {selectedProject.name}
+                </h3>
+
+                <p className="text-slate-300 mt-2">
+                  {selectedProject.description}
                 </p>
               </div>
-            ))}
-          </div>
 
-          <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
-            <button
-              disabled={page === 1}
-              onClick={() => setPage(page - 1)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                opacity: page === 1 ? 0.5 : 1,
-              }}
-            >
-              Previous
-            </button>
+              {/* Archive / Reactivate */}
+              {canManageProject && (
+                <div className="flex gap-3">
+                  {selectedProject.is_archived ? (
+                    <button
+                      onClick={() =>
+                        handleReactivate(selectedProject.id)
+                      }
+                      className="btn-primary"
+                    >
+                      Reactivate
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        handleArchive(selectedProject.id)
+                      }
+                      className="btn-danger"
+                    >
+                      Archive
+                    </button>
+                  )}
+                </div>
+              )}
 
-            <p style={{ margin: 0, paddingTop: "8px" }}>
-              Page {page} of {Math.ceil(count / pageSize)}
-            </p>
+              {/* Member Management */}
+              {canManageProject && (
+                <div className="space-y-3 pt-4 border-t border-slate-700">
+                  <h4 className="text-md font-medium text-slate-300">
+                    Manage Members
+                  </h4>
 
-            <button
-              disabled={page >= Math.ceil(count / pageSize)}
-              onClick={() => setPage(page + 1)}
-              style={{
-                padding: "8px 12px",
-                borderRadius: "6px",
-                cursor: "pointer",
-                opacity: page >= Math.ceil(count / pageSize) ? 0.5 : 1,
-              }}
-            >
-              Next
-            </button>
-          </div>
-
-          {/* Project Details Panel */}
-          <div style={{ width: "60%" }}>
-            {selectedProject ? (
-              <>
-                <h3 style={{ color: "#60a5fa" }}>Selected Project: {selectedProject.name}</h3>
-
-                {/* Archive / Reactivate */}
-                {canManageProject && (
-                    <>
-                        {selectedProject.is_archived ? (
-                        <button onClick={() => handleReactivate(selectedProject.id)}>
-                            Reactivate Project
-                        </button>
-                        ) : (
-                        <button onClick={() => handleArchive(selectedProject.id)}>
-                            Archive Project
-                        </button>
-                        )}
-                    </>
-                )}
-
-                <hr />
-
-                {/* Member Add/Remove */}
-                {canManageProject && (
-                    <>
-                        <h4>Manage Members</h4>
-                        {/* <input
-                        type="number"
-                        placeholder="User ID"
-                        value={memberData.user_id}
-                        onChange={(e) =>
-                            setMemberData({ ...memberData, user_id: e.target.value })
-                        }
-                        /> */}
-                        <select
-                          value={memberData.user_id}
-                          onChange={(e) =>
-                            setMemberData({ ...memberData, user_id: e.target.value })
-                          }
-                        >
-                          <option value="">Select User</option>
-
-                          {users.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.username} ({u.user_role})
-                            </option>
-                          ))}
-                        </select>
-
-
-                        <select
-                        value={memberData.action}
-                        onChange={(e) =>
-                            setMemberData({ ...memberData, action: e.target.value })
-                        }
-                        >
-                        <option value="add">Add</option>
-                        <option value="remove">Remove</option>
-                        </select>
-
-                        <select
-                        value={memberData.role}
-                        onChange={(e) =>
-                            setMemberData({ ...memberData, role: e.target.value })
-                        }
-                        >
-                        <option value="Member">Member</option>
-                        <option value="Manager">Manager</option>
-                        </select>
-
-                        <button onClick={handleMemberAction}>Submit</button>
-                    </>
-                )}
-
-                <hr />
-
-                {/* Timesheet Summary */}
-                {canManageProject && (
-                    <>
-                        <h4>Timesheet Summary</h4>
-                        <label>From:</label>
-                        <input
-                        type="date"
-                        value={summaryFilters.from}
-                        onChange={(e) =>
-                            setSummaryFilters({ ...summaryFilters, from: e.target.value })
-                        }
-                        />
-
-                        <label>To:</label>
-                        <input
-                        type="date"
-                        value={summaryFilters.to}
-                        onChange={(e) =>
-                            setSummaryFilters({ ...summaryFilters, to: e.target.value })
-                        }
-                        />
-
-                        <button onClick={fetchTimesheetSummary}>
-                        Get Summary
-                        </button>
-                    </>
-                )}
-
-                {summaryResult && (
-                  <div
-                    style={{
-                      marginTop: "15px",
-                      padding: "10px",
-                      border: "1px solid gray",
-                      borderRadius: "8px",
-                    }}
+                  <select
+                    value={memberData.user_id}
+                    onChange={(e) =>
+                      setMemberData({
+                        ...memberData,
+                        user_id: e.target.value,
+                      })
+                    }
+                    className="input-field"
                   >
-                    <p>
-                      <b>Total Logged Time:</b> {summaryResult.total_logged_time}
-                    </p>
-                    <p>
-                      <b>Billable Time:</b> {summaryResult.billable_time}
-                    </p>
-                    <p>
-                      <b>Total Entries:</b> {summaryResult.total_entries}
-                    </p>
+                    <option value="">Select User</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.username}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="flex gap-3">
+                    <select
+                      value={memberData.action}
+                      onChange={(e) =>
+                        setMemberData({
+                          ...memberData,
+                          action: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                    >
+                      <option value="add">Add</option>
+                      <option value="remove">Remove</option>
+                    </select>
+
+                    <select
+                      value={memberData.role}
+                      onChange={(e) =>
+                        setMemberData({
+                          ...memberData,
+                          role: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                    >
+                      <option value="Member">Member</option>
+                      <option value="Manager">Manager</option>
+                    </select>
                   </div>
-                )}
-              </>
-            ) : (
-              <p>Select a project to view details.</p>
-            )}
-          </div>
+
+                  <button
+                    onClick={handleMemberAction}
+                    className="btn-secondary w-fit"
+                  >
+                    Submit
+                  </button>
+                </div>
+              )}
+
+              {/* Timesheet Summary */}
+              {canManageProject && (
+                <div className="space-y-3 pt-4 border-t border-slate-700">
+                  <h4 className="text-md font-medium text-slate-300">
+                    Timesheet Summary
+                  </h4>
+
+                  <div className="flex gap-3">
+                    <input
+                      type="date"
+                      value={summaryFilters.from}
+                      onChange={(e) =>
+                        setSummaryFilters({
+                          ...summaryFilters,
+                          from: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                    />
+
+                    <input
+                      type="date"
+                      value={summaryFilters.to}
+                      onChange={(e) =>
+                        setSummaryFilters({
+                          ...summaryFilters,
+                          to: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                    />
+                  </div>
+
+                  <button
+                    onClick={fetchTimesheetSummary}
+                    className="btn-secondary w-fit"
+                  >
+                    Get Summary
+                  </button>
+
+                  {summaryResult && (
+                    <div className="bg-slate-700 p-4 rounded-lg text-sm space-y-2">
+                      <p>
+                        <span className="font-medium text-slate-300">
+                          Total Logged:
+                        </span>{" "}
+                        {summaryResult.total_logged_time}
+                      </p>
+                      <p>
+                        <span className="font-medium text-slate-300">
+                          Billable:
+                        </span>{" "}
+                        {summaryResult.billable_time}
+                      </p>
+                      <p>
+                        <span className="font-medium text-slate-300">
+                          Entries:
+                        </span>{" "}
+                        {summaryResult.total_entries}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </>
+          ) : (
+            <p className="text-slate-400">
+              Select a project to view details.
+            </p>
+          )}
+
         </div>
-      )}
+
+      </div>
     </div>
   );
 }

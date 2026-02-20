@@ -161,8 +161,13 @@ class MeAPIView(APIView):
     
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     permission_classes = [IsAuthenticated]
+    search_fields = [
+        'name',                      
+        'code',
+        'description'
+    ]
 
     def get_queryset(self):
         user = self.request.user

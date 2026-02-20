@@ -8,7 +8,7 @@ export default function Profile({ user }) {
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
     alert("Logged out successfully");
-    navigate("/login");
+    navigate("/");
   };
 
   return (

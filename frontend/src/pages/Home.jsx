@@ -45,8 +45,49 @@ export default function Home() {
 
     return (
         <div style={{ padding: "20px" }}>
-            <h1>Welcome Home</h1>
-            <nav style={{
+            <h1 className="text-6xl text-red-500">Welcome Home</h1>
+
+            <nav className="flex flex-wrap gap-3 bg-slate-800 p-4 rounded-xl shadow-md mb-6">
+              {["projects", "tasks", "timeentries"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-4 py-2 rounded-lg transition font-medium capitalize
+                    ${
+                      activeTab === tab
+                        ? "bg-blue-600 text-white shadow"
+                        : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+                    }`}
+                >
+                  {tab === "timeentries" ? "Time Entries" : tab}
+                </button>
+              ))}
+
+              {user?.is_staff && (
+                <button
+                  onClick={() => setActiveTab("users")}
+                  className={`px-4 py-2 rounded-lg transition font-medium
+                    ${
+                      activeTab === "users"
+                        ? "bg-blue-600 text-white shadow"
+                        : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+                    }`}
+                >
+                  Users
+                </button>
+              )}
+
+              <div className="ml-auto">
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 transition"
+                >
+                  Logout
+                </button>
+              </div>
+            </nav>
+
+            {/* <nav style={{
                 display: "flex",
                 gap: "20px",
                 padding: "10px",
@@ -106,7 +147,7 @@ export default function Home() {
                     </button>
                 )}
                 <button onClick={handleLogout}>Logout</button>
-            </nav>
+            </nav> */}
 
             {activeTab === "projects" && <Projects />}
             {activeTab == "tasks" && <Tasks />}
