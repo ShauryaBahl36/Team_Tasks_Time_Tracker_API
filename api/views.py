@@ -2,7 +2,7 @@ from django.shortcuts import render, get_object_or_404
 from api.serializers import RegisterSerializer
 from rest_framework import viewsets, status, filters
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, DjangoModelPermissions, AllowAny
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry
@@ -18,6 +18,8 @@ from django.core.mail import send_mail
 from rest_framework.generics import CreateAPIView
 from django.utils.timezone import now
 from django.db.models import Sum, F, ExpressionWrapper, DurationField
+import pandas as pd
+from django.db import transaction
 # # Create your views here.
 
 # class RegisterAPIView(APIView):
@@ -360,6 +362,61 @@ class ProjectViewSet(viewsets.ModelViewSet):
             },
             status=200
         )
+    
+    @action(detail=False, methods=["POST"], url_path="bulk-upload")
+    def bulk_upload(self, request):
+        file = request.FILES.get("file")
+
+        if not file:
+            return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not request.user.is_staff:
+            return Response({"error": "Only admin can bulk upload projects"}, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            if file.name.endswith(".csv"):
+                df = pd.read_csv(file)
+            elif file.name.endswith(".xlsx"):
+                df = pd.read_excel(file)
+            else:
+                return Response({"error": "Only CSV or XLSX allowed"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            required_columns = {"name", "code", "description"}
+            if not required_columns.issubset(df.columns):
+                return Response(
+                    {"error": f"File must contain columns: {required_columns}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            created_projects = []
+            with transaction.atomic():
+                for _, row in df.iterrows():
+                    project = Project.objects.create(
+                        name=row["name"],
+                        code=row["code"],
+                        description=row["description"],
+                        created_by=request.user
+
+                    )
+
+                    ProjectMembership.objects.create(
+                        user=request.user,
+                        project=project,
+                        role_in_project="Manager"
+                    )
+
+                    created_projects.append(project.id)
+
+            return Response(
+                {
+                    "message": "Bulk upload successful",
+                    "created_count": len(created_projects),
+                    "project_ids": created_projects
+                },
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     
 class TimeEntryViewSet(viewsets.ModelViewSet):
@@ -401,6 +458,8 @@ class TasksViewSet(viewsets.ModelViewSet):
     ordering_fields = ['status', 'priority']
 
     def get_queryset(self):
+        if self.request.user.is_staff:
+            return Task.objects.all()
         return Task.objects.filter(assigned_to=self.request.user)
 
     @action(detail=True, methods=['POST'])
@@ -472,6 +531,133 @@ class TasksViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    @action(detail=False, methods=["POST"], url_path="bulk-upload")
+    def bulk_upload(self, request):
+        file = request.FILES.get("file")
+
+        if not file:
+            return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            if file.name.endswith(".csv"):
+                df = pd.read_csv(file)
+            elif file.name.endswith(".xlsx"):
+                df = pd.read_excel(file)
+            else:
+                return Response({"error": "Only CSV or XLSX allowed"}, status=status.HTTP_400_BAD_REQUEST)
+
+            required_columns = {
+                "project_code",
+                "title",
+                "description",
+                "priority",
+                "status",
+                "due_date",
+                "estimate_hours",
+                "assigned_to_username"
+            }
+
+            if not required_columns.issubset(df.columns):
+                return Response(
+                    {"error": f"File must contain columns: {required_columns}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            created_count = 0
+            skipped_count = 0
+            failed_count = 0
+
+            skipped_rows = []
+            failed_rows = []
+
+            for index, row in df.iterrows():
+                try:
+                    project_code = str(row["project_code"]).strip()
+                    assigned_username = str(row["assigned_to_username"]).strip()
+
+                    project = Project.objects.filter(code=project_code).first()
+                    if not project:
+                        failed_count += 1
+                        failed_rows.append({
+                            "row": index + 2,
+                            "error": f"Project with code '{project_code}' does not exist"
+                        })
+                        continue
+
+                    is_member = ProjectMembership.objects.filter(
+                        user=request.user,
+                        project=project
+                    ).exists()
+
+                    if not is_member and not request.user.is_staff:
+                        failed_count += 1
+                        failed_rows.append({
+                            "row": index + 2,
+                            "error": f"You are not a member of project '{project_code}'"
+                        })
+                        continue
+
+                    assigned_user = User.objects.filter(username=assigned_username).first()
+                    if not assigned_user:
+                        failed_count += 1
+                        failed_rows.append({
+                            "row": index + 2,
+                            "error": f"User '{assigned_username}' does not exist"
+                        })
+                        continue
+
+                    # DUPLICATE CHECK
+                    duplicate = Task.objects.filter(
+                        project=project,
+                        title=str(row["title"]).strip(),
+                        assigned_to=assigned_user
+                    ).exists()
+
+                    if duplicate:
+                        skipped_count += 1
+                        skipped_rows.append({
+                            "row": index + 2,
+                            "message": "Duplicate task skipped"
+                        })
+                        continue
+
+                    task_data = {
+                        "project": project.id,
+                        "title": str(row["title"]).strip(),
+                        "description": str(row["description"]).strip(),
+                        "priority": str(row["priority"]).strip(),
+                        "status": str(row["status"]).strip(),
+                        "due_date": row["due_date"] if pd.notna(row["due_date"]) else None,
+                        "estimate_hours": row["estimate_hours"] if pd.notna(row["estimate_hours"]) else None,
+                        "assigned_to": assigned_user.id
+                    }
+
+                    serializer = TaskSerializer(data=task_data, context={"request": request})
+                    serializer.is_valid(raise_exception=True)
+                    serializer.save(created_by=request.user)
+
+                    created_count += 1
+
+                except Exception as e:
+                    failed_count += 1
+                    failed_rows.append({
+                        "row": index + 2,
+                        "error": str(e)
+                    })
+
+            return Response({
+                "message": "Bulk upload completed",
+                "total_rows": len(df),
+                "created": created_count,
+                "skipped": skipped_count,
+                "failed": failed_count,
+                "skipped_rows": skipped_rows,
+                "failed_rows": failed_rows
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()

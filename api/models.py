@@ -31,7 +31,7 @@ class User(AbstractUser):
 
 class Project(models.Model):
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=10)
+    code = models.CharField(max_length=10, unique=True)
     description = models.TextField()
     archived_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="created_projects", null=True, blank=True)

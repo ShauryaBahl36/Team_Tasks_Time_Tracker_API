@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import Profile from "./Profile";
 
 export default function Projects() {
   const token = localStorage.getItem("access");
@@ -10,6 +11,7 @@ export default function Projects() {
   const [user, setUser] = useState(null);
 
   const [loading, setLoading] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
 
   // Create project form
   const [formData, setFormData] = useState({
@@ -33,6 +35,11 @@ export default function Projects() {
 
   const [summaryResult, setSummaryResult] = useState(null);
 
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
+  const pageSize = 5;
+
   const canManageProject = user?.is_staff || selectedProject?.my_role === "Manager";
 
   // Fetch all projects
@@ -40,7 +47,7 @@ export default function Projects() {
     try {
       setLoading(true);
 
-      const response = await axios.get("http://127.0.0.1:8000/url/projects/", {
+      const response = await axios.get(`http://127.0.0.1:8000/url/projects/?search=${search}&page=${page}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -49,8 +56,10 @@ export default function Projects() {
       // handle pagination
       if (response.data.results) {
         setProjects(response.data.results);
+        setCount(response.data.count);
       } else {
         setProjects(response.data);
+        setCount(response.data.length);
       }
     } catch (error) {
       console.log(error.response?.data || error.message);
@@ -100,15 +109,43 @@ export default function Projects() {
     }
   };
 
+  const handleBulkUpload = async () => {
+    if (!uploadFile) {
+      alert("Please select a CSV/XLSX file");
+      return;
+    }
+
+    try {
+      const form = new FormData();
+      form.append("file", uploadFile);
+
+      await axios.post("http://localhost:8000/url/projects/bulk-upload/", form, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      alert("Bulk upload successful");
+      fetchProjects();
+    } catch (error) {
+      console.log(error.response?.data || error.message);
+      alert("Bulk upload failed");
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       fetchUser();
       fetchUsers();
-      fetchProjects();
     };
 
     loadData();
   }, []);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [page, search])
 
   // Create project
   const handleCreateProject = async () => {
@@ -240,6 +277,10 @@ export default function Projects() {
 
       <hr />
 
+      <Profile user={user} />
+
+      <hr />
+
       {/* Create Project */}
       {user?.is_staff && (
         <>
@@ -273,11 +314,55 @@ export default function Projects() {
         </div>
 
         <hr />
+
+        <h3>Bulk Upload Projects</h3>
+
+        <input
+        type="file"
+        accept=".csv,.xlsx"
+        onChange={(e) => setUploadFile(e.target.files[0])}
+        />
+
+        <button onClick={handleBulkUpload} style={{ marginTop: "10px" }}>
+          Upload File
+        </button>
         </>
       )}
 
       {/* Project List */}
       <h3>My Projects</h3>
+
+      <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+        <input
+          type="text"
+          placeholder="Search projects by name/code..."
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            padding: "8px",
+            borderRadius: "6px",
+            border: "1px solid gray",
+            width: "300px",
+          }}
+        />
+
+        <button
+          onClick={() => {
+            setPage(1);
+            fetchProjects();
+          }}
+          style={{
+            padding: "8px 14px",
+            borderRadius: "6px",
+            cursor: "pointer",
+          }}
+        >
+          Search
+        </button>
+      </div>
 
       {loading ? (
         <p>Loading projects...</p>
@@ -321,6 +406,38 @@ export default function Projects() {
                 </p>
               </div>
             ))}
+          </div>
+
+          <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                opacity: page === 1 ? 0.5 : 1,
+              }}
+            >
+              Previous
+            </button>
+
+            <p style={{ margin: 0, paddingTop: "8px" }}>
+              Page {page} of {Math.ceil(count / pageSize)}
+            </p>
+
+            <button
+              disabled={page >= Math.ceil(count / pageSize)}
+              onClick={() => setPage(page + 1)}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                opacity: page >= Math.ceil(count / pageSize) ? 0.5 : 1,
+              }}
+            >
+              Next
+            </button>
           </div>
 
           {/* Project Details Panel */}

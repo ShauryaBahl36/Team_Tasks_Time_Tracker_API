@@ -7,6 +7,9 @@ export default function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [search, setSearch] = useState("");
   const [projects, setProjects] = useState([]);
+  const [bulkFile, setBulkFile] = useState(null);
+  const [bulkResult, setBulkResult] = useState(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     project: "",
@@ -132,6 +135,35 @@ export default function Tasks() {
     }
   };
 
+  const handleBulkUpload = async () => {
+    if (!bulkFile) {
+        alert("Please select a file first");
+        return;
+    }
+
+    const data = new FormData();
+    data.append("file", bulkFile);
+
+    try {
+        const response = await axios.post("http://localhost:8000/url/tasks/bulk-upload/", data, 
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "multipart/form-data",
+                },
+            }
+        );
+
+        setBulkResult(response.data);
+        fetchTasksNormal();
+    } catch (error) {
+        console.log(error.response?.data || error.message);
+        alert(error.response?.data?.error || "Bulk upload failed");
+    } finally {
+        setBulkLoading(false);
+    }
+  };
+
   return (
     <div style={{ padding: "20px" }}>
       <h2>Task Dashboard</h2>
@@ -237,6 +269,73 @@ export default function Tasks() {
           Create Task
         </button>
       </div>
+
+      <hr />
+
+      <h3>Bulk Upload Tasks</h3>
+
+      <input
+      type="file"
+      accept=".csv,.xlsx"
+      onChange={(e) => setBulkFile(e.target.files[0])}
+      />
+
+      <button
+        onClick={handleBulkUpload}
+        style={{ marginLeft: "10px" }}
+        disabled={bulkLoading}
+      >
+        {bulkLoading ? "Uploading..." : "Upload File"}
+      </button>
+
+      <p style={{ fontSize: "14px", color: "gray" }}>
+        Upload CSV/XLSX with required columns: project_code, title, description, priority, status, due_date, estimate_hours, assigned_to_username
+      </p>
+
+      {bulkResult && (
+        <div
+            style={{
+            marginTop: "15px",
+            padding: "12px",
+            border: "1px solid gray",
+            borderRadius: "8px",
+            backgroundColor: "#f9f9f9",
+            }}
+        >
+            <h4>Upload Summary</h4>
+
+            <p><b>Total Rows:</b> {bulkResult.total_rows}</p>
+            <p><b>Created:</b> {bulkResult.created}</p>
+            <p><b>Skipped (Duplicates):</b> {bulkResult.skipped}</p>
+            <p><b>Failed:</b> {bulkResult.failed}</p>
+
+            {bulkResult.failed_rows && bulkResult.failed_rows.length > 0 && (
+            <>
+                <h4 style={{ color: "red" }}>Failed Rows</h4>
+                <ul>
+                {bulkResult.failed_rows.map((err, idx) => (
+                    <li key={idx}>
+                    <b>Row {err.row}:</b> {err.error}
+                    </li>
+                ))}
+                </ul>
+            </>
+            )}
+
+            {bulkResult.skipped_rows && bulkResult.skipped_rows.length > 0 && (
+            <>
+                <h4 style={{ color: "orange" }}>Skipped Rows</h4>
+                <ul>
+                {bulkResult.skipped_rows.map((s, idx) => (
+                    <li key={idx}>
+                    <b>Row {s.row}:</b> {s.message}
+                    </li>
+                ))}
+                </ul>
+            </>
+            )}
+        </div>
+        )}
 
       <hr />
 
