@@ -4,12 +4,19 @@ import axios from "axios";
 export default function Tasks() {
   const token = localStorage.getItem("access");
 
+  /* ---------------- STATE ---------------- */
+
   const [tasks, setTasks] = useState([]);
-  const [search, setSearch] = useState("");
   const [projects, setProjects] = useState([]);
-  const [bulkFile, setBulkFile] = useState(null);
-  const [bulkResult, setBulkResult] = useState(null);
-  const [bulkLoading, setBulkLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const [pagination, setPagination] = useState({
+    count: 0,
+    next: null,
+    previous: null,
+  });
 
   const [formData, setFormData] = useState({
     project: "",
@@ -19,71 +26,92 @@ export default function Tasks() {
     status: "To-Do",
     due_date: "",
     estimate_hours: "",
-    assigned_to: "",
   });
 
-  const fetchTasksNormal = async () => {
+  /* ---------------- FETCH FUNCTIONS ---------------- */
+
+  const fetchTasks = async (url = null) => {
     try {
-      const response = await axios.get(
-        `http://127.0.0.1:8000/url/tasks/?search=${search}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const requestUrl = url || `http://127.0.0.1:8000/url/tasks/?search=${search}`;
+      const res = await axios.get(
+        requestUrl,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (response.data.results) {
-        setTasks(response.data.results)
-      } else {
-        setTasks(response.data);
-      }
-    } catch (error) {
-      console.log(error.response?.data || error.message);
-      alert("Failed to fetch tasks");
+      setTasks(res.data.results || []);
+      setPagination({
+        count: res.data.count,
+        next: res.data.next,
+        previous: res.data.previous,
+      });
+    } catch (err) {
+      console.log(err.response?.data || err.message);
     }
   };
+
   const fetchProjects = async () => {
-      try {
-          const response = await axios.get("http://localhost:8000/url/projects/", {
-              headers: {
-                  Authorization: `Bearer ${token}`
-                },
-            });
-            
-            if (response.data.results) {
-                setProjects(response.data.results);
-            } else {
-                setProjects(response.data);
-            }
-        } catch (error) {
-            console.log(error.response?.data || error.message);
-            alert("Failed to fetch projects")
-        }
+    try {
+      const res = await axios.get(
+        "http://localhost:8000/url/projects/",
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setProjects(res.data.results || res.data);
+    } catch (err) {
+      console.log(err.response?.data || err.message);
+    }
   };
-    const fetchTasksEvent = useEffectEvent(() => {
-        fetchTasksNormal();
-        fetchProjects();
-    });
-    
+
+  const fetchNotifications = async () => {
+    try {
+        // 1️⃣ Get notifications
+        const res = await axios.get(
+        "http://localhost:8000/url/notifications/",
+        { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const data = res.data.results || res.data;
+
+        setNotifications(data);
+
+        // 2️⃣ Mark all as read in backend
+        await axios.post(
+        `http://localhost:8000/url/notifications/${id}/mark_read/`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        // 3️⃣ Update frontend state to mark them read immediately
+        setNotifications((prev) =>
+        prev.map((n) => ({ ...n, is_read: true }))
+        );
+
+    } catch (err) {
+        console.log(err.response?.data || err.message);
+    }
+    };
+
+  const fetchTasksEvent = useEffectEvent(() => {
+    fetchTasks();
+    fetchProjects();
+    fetchNotifications();
+  })
+
   useEffect(() => {
     fetchTasksEvent();
   }, []);
 
+  /* ---------------- ACTIONS ---------------- */
+
   const handleCreateTask = async () => {
+    if (!formData.project) return alert("Select project");
+    if (!formData.title) return alert("Title required");
+
     try {
-      await axios.post("http://127.0.0.1:8000/url/tasks/", formData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!formData.project) {
-        alert("Please select a project");
-        return;
-      }
-
-      alert("Task Created successfully!");
+      await axios.post(
+        "http://127.0.0.1:8000/url/tasks/",
+        formData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       setFormData({
         project: "",
@@ -93,500 +121,321 @@ export default function Tasks() {
         status: "To-Do",
         due_date: "",
         estimate_hours: "",
-        assigned_to: "",
       });
 
-      fetchTasksNormal();
-    } catch (error) {
-      console.log(error.response?.data || error.message);
-      alert("Task creation failed");
+      fetchTasks();
+    } catch (err) {
+      console.log(err.response?.data || err.message);
     }
   };
 
   const handleDeleteTask = async (id) => {
     try {
-      await axios.delete(`http://127.0.0.1:8000/url/tasks/${id}/`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      alert("Task Deleted successfully");
-      fetchTasksNormal();
-    } catch (error) {
-      console.log(error.response?.data || error.message);
-      alert("Task delete failed");
+      await axios.delete(
+        `http://127.0.0.1:8000/url/tasks/${id}/`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchTasks();
+    } catch (err) {
+      console.log(err.response?.data || err.message);
     }
   };
 
-  const handleUpdateTask = async (id, updatedTask) => {
-    try {
-      await axios.put(`http://127.0.0.1:8000/url/tasks/${id}/`, updatedTask, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      alert("Task Updated Successfully!");
-      fetchTasksNormal();
-    } catch (error) {
-      console.log(error.response?.data || error.message);
-      alert("Task update failed");
-    }
-  };
-
-  const handleBulkUpload = async () => {
-    if (!bulkFile) {
-        alert("Please select a file first");
-        return;
-    }
-
-    const data = new FormData();
-    data.append("file", bulkFile);
-
-    try {
-        const response = await axios.post("http://localhost:8000/url/tasks/bulk-upload/", data, 
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "multipart/form-data",
-                },
-            }
-        );
-
-        setBulkResult(response.data);
-        fetchTasksNormal();
-    } catch (error) {
-        console.log(error.response?.data || error.message);
-        alert(error.response?.data?.error || "Bulk upload failed");
-    } finally {
-        setBulkLoading(false);
-    }
-  };
+  /* ---------------- UI ---------------- */
 
   return (
-    <div style={{ padding: "20px" }}>
-      <h2>Task Dashboard</h2>
+    <div className="space-y-8">
 
-      {/* Search */}
-      <div style={{ marginBottom: "20px" }}>
+      {/* HEADER */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-blue-400">
+            Tasks Dashboard
+          </h2>
+          <p className="text-slate-400 text-sm">
+            Create, manage and track tasks
+          </p>
+        </div>
+
+        {/* Notification Bell */}
+        <div className="relative">
+          <button
+            onClick={()=> {
+                fetchNotifications();
+                setShowNotifications(!showNotifications);
+            }}
+            className="text-2xl text-slate-300"
+          >
+            🔔
+          </button>
+
+          {notifications.filter((n) => !n.is_read).length > 0 && (
+            <span className="absolute -top-2 -right-2 bg-red-500 text-xs px-2 rounded-full">
+              {notifications.filter((n) => !n.is_read).length}
+            </span>
+          )}
+          {showNotifications && (
+            <div className="absolute right-0 mt-3 w-80 bg-slate-800 rounded-xl shadow-lg p-4 z-50 max-h-80 overflow-y-auto">
+                {notifications.length === 0 ? (
+                <p className="text-slate-400 text-sm">
+                    No notifications
+                </p>
+                ) : (
+                notifications.map((n) => (
+                    <div
+                    key={n.id}
+                    className={`border-b border-slate-700 py-2 text-sm ${
+                        n.is_read ? "text-slate-400" : "text-white font-medium"
+                    }`}
+                    >
+                    {n.message}
+                    </div>
+                ))
+                )}
+            </div>
+            )}
+        </div>
+      </div>
+
+      {/* SEARCH */}
+      <div className="flex gap-3">
         <input
           type="text"
           placeholder="Search tasks..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          className="input-field w-72"
         />
-        <button onClick={fetchTasksNormal}>Search</button>
+        <button
+          onClick={() => fetchTasks()}
+          className="btn-secondary"
+        >
+          Search
+        </button>
       </div>
 
-      {/* Create Task Form */}
-      <h3>Create Task</h3>
-      <div style={{ display: "flex", flexDirection: "column", width: "300px" }}>
-        {/* <input
-          type="number"
-          placeholder="Project ID"
-          value={formData.project}
-          onChange={(e) => setFormData({ ...formData, project: e.target.value })}
-        /> */}
+      {/* CREATE TASK */}
+      <div className="bg-slate-800 p-6 rounded-xl space-y-4">
+        <h3 className="text-lg font-semibold text-slate-300">
+          Create Task
+        </h3>
 
-        <select
-        value={formData.project}
-        onChange={(e) => setFormData({ ...formData, project: e.target.value })}
+        <div className="grid md:grid-cols-2 gap-4">
+
+          <select
+            className="input-field"
+            value={formData.project}
+            onChange={(e) =>
+              setFormData({ ...formData, project: e.target.value })
+            }
+          >
+            <option value="">Select Project</option>
+            {projects.map((proj) => (
+              <option key={proj.id} value={proj.id}>
+                {proj.name}
+              </option>
+            ))}
+          </select>
+
+          <input
+            className="input-field"
+            placeholder="Title"
+            value={formData.title}
+            onChange={(e) =>
+              setFormData({ ...formData, title: e.target.value })
+            }
+          />
+
+          <textarea
+            className="input-field md:col-span-2"
+            placeholder="Description"
+            value={formData.description}
+            onChange={(e) =>
+              setFormData({ ...formData, description: e.target.value })
+            }
+          />
+
+          <select
+            className="input-field"
+            value={formData.priority}
+            onChange={(e) =>
+              setFormData({ ...formData, priority: e.target.value })
+            }
+          >
+            <option>Low</option>
+            <option>Medium</option>
+            <option>High</option>
+          </select>
+
+          <input
+            type="date"
+            className="input-field"
+            value={formData.due_date}
+            onChange={(e) =>
+              setFormData({ ...formData, due_date: e.target.value })
+            }
+          />
+
+          <input
+            type="number"
+            className="input-field"
+            placeholder="Estimate Hours"
+            value={formData.estimate_hours}
+            onChange={(e) =>
+              setFormData({ ...formData, estimate_hours: e.target.value })
+            }
+          />
+        </div>
+
+        <button
+          onClick={handleCreateTask}
+          className="btn-primary w-fit"
         >
-        <option value="">Select Project</option>
-
-        {projects.map((proj) => (
-            <option key={proj.id} value={proj.id}>
-            {proj.name} ({proj.code})
-            </option>
-        ))}
-        </select>
-
-
-        <input
-          type="text"
-          placeholder="Title"
-          value={formData.title}
-          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-        />
-
-        <textarea
-          placeholder="Description"
-          value={formData.description}
-          onChange={(e) =>
-            setFormData({ ...formData, description: e.target.value })
-          }
-        />
-
-        <select
-          value={formData.priority}
-          onChange={(e) =>
-            setFormData({ ...formData, priority: e.target.value })
-          }
-        >
-          <option value="Low">Low</option>
-          <option value="Medium">Medium</option>
-          <option value="High">High</option>
-        </select>
-
-        <select
-          value={formData.status}
-          onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-        >
-          <option value="To-Do">To-Do</option>
-          <option value="In-Progress">In-Progress</option>
-          <option value="Done">Done</option>
-        </select>
-
-        <label>Due Date</label>
-        <input
-          type="date"
-          value={formData.due_date}
-          onChange={(e) =>
-            setFormData({ ...formData, due_date: e.target.value })
-          }
-        />
-
-        <input
-          type="number"
-          placeholder="Estimate Hours"
-          value={formData.estimate_hours}
-          onChange={(e) =>
-            setFormData({ ...formData, estimate_hours: e.target.value })
-          }
-        />
-
-        <input
-          type="number"
-          placeholder="Assigned To (User ID)"
-          value={formData.assigned_to}
-          onChange={(e) =>
-            setFormData({ ...formData, assigned_to: e.target.value })
-          }
-        />
-
-        <button onClick={handleCreateTask} style={{ marginTop: "10px" }}>
           Create Task
         </button>
       </div>
 
-      <hr />
-
-      <h3>Bulk Upload Tasks</h3>
-
-      <input
-      type="file"
-      accept=".csv,.xlsx"
-      onChange={(e) => setBulkFile(e.target.files[0])}
-      />
-
-      <button
-        onClick={handleBulkUpload}
-        style={{ marginLeft: "10px" }}
-        disabled={bulkLoading}
-      >
-        {bulkLoading ? "Uploading..." : "Upload File"}
-      </button>
-
-      <p style={{ fontSize: "14px", color: "gray" }}>
-        Upload CSV/XLSX with required columns: project_code, title, description, priority, status, due_date, estimate_hours, assigned_to_username
-      </p>
-
-      {bulkResult && (
-        <div
-            style={{
-            marginTop: "15px",
-            padding: "12px",
-            border: "1px solid gray",
-            borderRadius: "8px",
-            backgroundColor: "#f9f9f9",
-            }}
-        >
-            <h4>Upload Summary</h4>
-
-            <p><b>Total Rows:</b> {bulkResult.total_rows}</p>
-            <p><b>Created:</b> {bulkResult.created}</p>
-            <p><b>Skipped (Duplicates):</b> {bulkResult.skipped}</p>
-            <p><b>Failed:</b> {bulkResult.failed}</p>
-
-            {bulkResult.failed_rows && bulkResult.failed_rows.length > 0 && (
-            <>
-                <h4 style={{ color: "red" }}>Failed Rows</h4>
-                <ul>
-                {bulkResult.failed_rows.map((err, idx) => (
-                    <li key={idx}>
-                    <b>Row {err.row}:</b> {err.error}
-                    </li>
-                ))}
-                </ul>
-            </>
-            )}
-
-            {bulkResult.skipped_rows && bulkResult.skipped_rows.length > 0 && (
-            <>
-                <h4 style={{ color: "orange" }}>Skipped Rows</h4>
-                <ul>
-                {bulkResult.skipped_rows.map((s, idx) => (
-                    <li key={idx}>
-                    <b>Row {s.row}:</b> {s.message}
-                    </li>
-                ))}
-                </ul>
-            </>
-            )}
-        </div>
+      {/* TASK LIST */}
+      <div className="space-y-4">
+        {tasks.length === 0 ? (
+          <p className="text-slate-400">No tasks found</p>
+        ) : (
+          tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              token={token}
+              onDelete={handleDeleteTask}
+            />
+          ))
         )}
+      </div>
 
-      <hr />
+      {/* PAGINATION */}
+      <div className="flex justify-between items-center mt-6">
+        <p className="text-slate-400 text-sm">
+            Total Tasks: {pagination.count}
+        </p>
 
-      {/* Task List */}
-      <h3>My Assigned Tasks</h3>
+        <div className="flex gap-3">
+            <button
+            disabled={!pagination.previous}
+            onClick={() => fetchTasks(pagination.previous)}
+            className="btn-secondary disabled:opacity-40"
+            >
+            Previous
+            </button>
 
-      {Array.isArray(tasks) && tasks.length > 0 ? (
-        tasks.map((task) => (
-            <TaskCard 
-            key={task.id} 
-            task={task}
-            onDelete={handleDeleteTask}
-            onUpdate={handleUpdateTask} />
-        ))
-       ) : (
-        <p>No tasks found</p>
-       )}
-
-
-
-      {/* {tasks.length === 0 ? (
-        <p>No tasks assigned yet.</p>
-      ) : (
-        tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            onDelete={handleDeleteTask}
-            onUpdate={handleUpdateTask}
-          />
-        ))
-      )} */}
+            <button
+            disabled={!pagination.next}
+            onClick={() => fetchTasks(pagination.next)}
+            className="btn-secondary disabled:opacity-40"
+            >
+            Next
+            </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function TaskCard({ task, onDelete, onUpdate }) {
-  const [editMode, setEditMode] = useState(false);
+/* ================= TASK CARD ================= */
 
-  const [updatedTask, setUpdatedTask] = useState({
-    project: task.project,
-    title: task.title,
-    description: task.description,
-    priority: task.priority,
-    status: task.status,
-    due_date: task.due_date,
-    estimate_hours: task.estimate_hours,
-    assigned_to: task.assigned_to,
-  });
+function TaskCard({ task, onDelete, token }) {
 
-  const allowedTransitions = {
-    "To-Do": ["In-Progress"],
-    "In-Progress": ["Done"],
-    "Done": []
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState("");
+  const [showComments, setShowComments] = useState(false);
+
+  const fetchComments = async () => {
+    const res = await axios.get(
+      `http://localhost:8000/url/tasks/${task.id}/comments/`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setComments(res.data.results || res.data);
   };
 
-  const allowedNextStatuses = allowedTransitions[task.status] || [];
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
 
-  const handleSave = () => {
-    onUpdate(task.id, updatedTask);
-    setEditMode(false);
+    await axios.post(
+      `http://localhost:8000/url/tasks/${task.id}/comments/`,
+      { body: newComment },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    setNewComment("");
+    fetchComments();
   };
 
-  const calculateDaysLeft = (dueDate) => {
-    if (!dueDate) return null;
-
-    const today = new Date();
-    const due = new Date(dueDate);
-
-    // remove time part for accurate day calculation
-    today.setHours(0, 0, 0, 0);
-    due.setHours(0, 0, 0, 0);
-
-    const diffTime = due - today;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    return diffDays;
-    };
-
-    const daysLeft = calculateDaysLeft(task.due_date);
-
+  const highlightMentions = (text) =>
+    text.split(/(@\w+)/g).map((part, i) =>
+      part.startsWith("@") ? (
+        <span key={i} className="text-yellow-400 font-medium">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
 
   return (
-    <div
-        style={{
-        border: "1px solid gray",
-        padding: "15px",
-        marginBottom: "10px",
-        borderRadius: "8px",
+    <div className="bg-slate-800 p-5 rounded-xl space-y-3">
+
+      <div className="flex justify-between">
+        <h4 className="text-blue-400 font-semibold">
+          {task.title}
+        </h4>
+
+        <button
+          onClick={() => onDelete(task.id)}
+          className="btn-danger"
+        >
+          Delete
+        </button>
+      </div>
+
+      <p className="text-slate-300 text-sm">
+        {task.description}
+      </p>
+
+      <button
+        onClick={() => {
+          setShowComments(!showComments);
+          if (!showComments) fetchComments();
         }}
-    >
-        {editMode ? (
-        <>
+        className="text-blue-400 text-sm"
+      >
+        {showComments ? "Hide Comments" : "View Comments"}
+      </button>
+
+      {showComments && (
+        <div className="bg-slate-900 p-4 rounded-lg space-y-3">
+          {comments.map((c) => (
+            <div key={c.id} className="text-sm text-slate-300">
+              <span className="text-blue-400 font-medium">
+                {c.author_username}
+              </span>
+              : {highlightMentions(c.body)}
+            </div>
+          ))}
+
+          <div className="flex gap-2">
             <input
-            type="text"
-            value={updatedTask.title}
-            onChange={(e) =>
-                setUpdatedTask({ ...updatedTask, title: e.target.value })
-            }
+              className="input-field flex-1"
+              placeholder="Write comment... use @username"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
             />
-
-            <textarea
-            value={updatedTask.description}
-            onChange={(e) =>
-                setUpdatedTask({ ...updatedTask, description: e.target.value })
-            }
-            />
-
-            {/* Priority Dropdown */}
-            <label>
-            <b>Priority:</b>
-            </label>
-            <select
-            value={updatedTask.priority}
-            onChange={(e) =>
-                setUpdatedTask({ ...updatedTask, priority: e.target.value })
-            }
+            <button
+              onClick={handleAddComment}
+              className="btn-primary"
             >
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-            </select>
-
-            <br />
-            <br />
-
-            {/* Status Dropdown with Workflow Guard */}
-            <label>
-            <b>Status:</b>
-            </label>
-            <select
-            value={updatedTask.status}
-            onChange={(e) =>
-                setUpdatedTask({ ...updatedTask, status: e.target.value })
-            }
-            >
-            <option value={task.status}>{task.status}</option>
-
-            {allowedNextStatuses.map((status) => (
-                <option key={status} value={status}>
-                {status}
-                </option>
-            ))}
-            </select>
-
-            {allowedNextStatuses.length === 0 && (
-            <p style={{ color: "red" }}>
-                Task is already Done. Status cannot be changed.
-            </p>
-            )}
-
-            <br />
-            <br />
-
-            {/* Due Date */}
-            <p>
-                <b>Due Date:</b>{" "}
-                {task.due_date ? (
-                    <>
-                    {task.due_date}{" "}
-                    {daysLeft !== null && (
-                        daysLeft > 0 ? (
-                        <span style={{ color: "lightgreen" }}>
-                            (Due in {daysLeft} days)
-                        </span>
-                        ) : daysLeft === 0 ? (
-                        <span style={{ color: "yellow" }}>
-                            (Due Today)
-                        </span>
-                        ) : (
-                        <span style={{ color: "red" }}>
-                            (Overdue by {Math.abs(daysLeft)} days)
-                        </span>
-                        )
-                    )}
-                    </>
-                ) : (
-                    <span style={{ color: "orange" }}>Not Set</span>
-                )}
-            </p>
-
-            <br />
-            <br />
-
-            {/* Estimate Hours */}
-            <label>
-            <b>Estimate Hours:</b>
-            </label>
-            <input
-            type="number"
-            value={updatedTask.estimate_hours || ""}
-            onChange={(e) =>
-                setUpdatedTask({ ...updatedTask, estimate_hours: e.target.value })
-            }
-            />
-
-            <br />
-            <br />
-
-            <button onClick={handleSave}>Save</button>
-            <button onClick={() => setEditMode(false)}>Cancel</button>
-        </>
-        ) : (
-        <>
-            <h4>{task.title}</h4>
-            <p>{task.description}</p>
-
-            <p>
-            <b>Status:</b> {task.status} | <b>Priority:</b> {task.priority}
-            </p>
-
-            <p>
-                <b>Due Date:</b>{" "}
-                {task.due_date ? (
-                    <>
-                    {task.due_date}{" "}
-                    {daysLeft !== null && (
-                        daysLeft > 0 ? (
-                        <span style={{ color: "lightgreen" }}>
-                            (Due in {daysLeft} days)
-                        </span>
-                        ) : daysLeft === 0 ? (
-                        <span style={{ color: "yellow" }}>
-                            (Due Today)
-                        </span>
-                        ) : (
-                        <span style={{ color: "red" }}>
-                            (Overdue by {Math.abs(daysLeft)} days)
-                        </span>
-                        )
-                    )}
-                    </>
-                ) : (
-                    <span style={{ color: "orange" }}>Not Set</span>
-                )}
-            </p>
-
-            <p>
-                <b>Estimate Hours:</b>{" "}
-                {task.estimate_hours ? (
-                    <span>{task.estimate_hours} hrs</span>
-                ) : (
-                    <span style={{ color: "orange" }}>Not Set</span>
-                )}
-            </p>
-
-
-            <button onClick={() => setEditMode(true)}>Edit</button>
-            <button onClick={() => onDelete(task.id)}>Delete</button>
-        </>
-        )}
+              Send
+            </button>
+          </div>
+        </div>
+      )}
     </div>
-    );
+  );
 }

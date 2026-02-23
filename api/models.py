@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
+import uuid
 # Create your models here.
 
 
@@ -100,3 +101,43 @@ class TimeEntry(models.Model):
         if self.end_time is None:
             return None
         return self.end_time - self.start_time
+    
+class Notification(models.Model):
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    sender = models.ForeignKey(User, on_delete=models.CASCADE)
+    task = models.ForeignKey("Task", on_delete=models.CASCADE, null=True, blank=True)
+    comment = models.ForeignKey("Comment", on_delete=models.CASCADE, null=True, blank=True)
+
+    message = models.CharField(max_length=255)
+    is_read = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+class BulkUploadReport(models.Model):
+
+    class UploadTypeChoices(models.TextChoices):
+        PROJECT = "Projects"
+        TASK = "Tasks"
+        TIME_ENTRY = "Time-Entry"
+
+    run_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    upload_type = models.CharField(max_length=30, choices=UploadTypeChoices.choices)
+
+    total_records = models.IntegerField(default=0)
+    success_records = models.IntegerField(default=0)
+    failed_records = models.IntegerField(default=0)
+    skipped_records = models.IntegerField(default=0)
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+
+    # 👇 NEW FIELDS (IMPORTANT)
+    failed_details = models.JSONField(default=list, blank=True)
+    skipped_details = models.JSONField(default=list, blank=True)
+
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.upload_type} - {self.run_id}"

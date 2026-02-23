@@ -4,6 +4,7 @@ import Tasks from '../components/Tasks.jsx';
 import TimeEntries from '../components/Time_Entry.jsx';
 import Projects from "../components/Projects.jsx";
 import Users from "../components/Users.jsx";
+import Report from "../components/Report.jsx";
 import axios from 'axios';
 
 export default function Home() {
@@ -64,17 +65,30 @@ export default function Home() {
               ))}
 
               {user?.is_staff && (
-                <button
-                  onClick={() => setActiveTab("users")}
-                  className={`px-4 py-2 rounded-lg transition font-medium
-                    ${
-                      activeTab === "users"
-                        ? "bg-blue-600 text-white shadow"
-                        : "bg-slate-700 hover:bg-slate-600 text-slate-300"
-                    }`}
-                >
-                  Users
-                </button>
+                <>
+                  <button
+                    onClick={() => setActiveTab("users")}
+                    className={`px-4 py-2 rounded-lg transition font-medium
+                      ${
+                        activeTab === "users"
+                          ? "bg-blue-600 text-white shadow"
+                          : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+                      }`}
+                  >
+                    Users
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("report")}
+                    className={`px-4 py-2 rounded-lg transition font-medium
+                      ${
+                        activeTab === "report"
+                          ? "bg-blue-600 text-white shadow"
+                          : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+                      }`}
+                  >
+                    Report
+                  </button>
+                </>
               )}
 
               <div className="ml-auto">
@@ -87,72 +101,11 @@ export default function Home() {
               </div>
             </nav>
 
-            {/* <nav style={{
-                display: "flex",
-                gap: "20px",
-                padding: "10px",
-                backgroundColor: "#f1f1f1",
-                borderRadius: "8px",
-                marginBottom: "20px",
-            }}>
-                <button
-                onClick={() => setActiveTab("projects")}
-                style={{
-                    padding: "8px 16px",
-                    border: "none",
-                    cursor: "pointer",
-                    borderRadius: "6px",
-                    backgroundColor: activeTab === "projects" ? "#007bff" : "#ddd",
-                    color: activeTab === "projects" ? "white" : "black",
-                }}
-                >
-                Projects
-                </button>
-                <button 
-                onClick={()=> setActiveTab("tasks")}
-                style={{
-                    padding: "8px 16px",
-                    border: "none",
-                    cursor: "pointer",
-                    borderRadius: "6px",
-                    backgroundColor: activeTab === "tasks" ? "#007bff" : "#ddd",
-                    color: activeTab === "tasks" ? "white" : "black",
-                }}
-                >
-                    Tasks
-                </button>
-
-                <button
-                onClick={()=> setActiveTab("timeentries")}
-                style={{
-                    padding: "8px 16px",
-                    border: "none",
-                    cursor: "pointer",
-                    borderRadius: "6px",
-                    backgroundColor: activeTab == "timeentries" ? "#007bff" : "#ddd",
-                    color: activeTab == "timeentries" ? "white": "black",
-                }}>
-                    Time Entries
-                </button>
-                {user?.is_staff && (
-                    <button onClick={() => setActiveTab("users")} style={{
-                    padding: "8px 16px",
-                    border: "none",
-                    cursor: "pointer",
-                    borderRadius: "6px",
-                    backgroundColor: activeTab == "users" ? "#007bff" : "#ddd",
-                    color: activeTab == "users" ? "white": "black",
-                }}>
-                        Users
-                    </button>
-                )}
-                <button onClick={handleLogout}>Logout</button>
-            </nav> */}
-
             {activeTab === "projects" && <Projects />}
             {activeTab == "tasks" && <Tasks />}
             {activeTab == "timeentries" && <TimeEntries />}
             {activeTab === "users" && user?.is_staff && <Users />}
+            {activeTab === "report" && user?.is_staff && <Report />}
         </div>
     );
 }

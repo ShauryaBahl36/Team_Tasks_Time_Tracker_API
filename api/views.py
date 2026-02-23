@@ -2,12 +2,20 @@ from django.shortcuts import render, get_object_or_404
 from api.serializers import RegisterSerializer
 from rest_framework import viewsets, status, filters
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework.permissions import (
+    IsAuthenticated, IsAdminUser, AllowAny
+)
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
-from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry
-from api.serializers import ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer, UserListSerializer
-from api.permissions import IsAdminUserRole, IsOwnerOrProjectManager, IsProjectManagerOrAdmin
+from api.models import (
+    User, Project, ProjectMembership, Task, Comment, TimeEntry, Notification, BulkUploadReport
+)
+from api.serializers import (
+    ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer, UserListSerializer, NotificationSerializer, BulkUploadReportSerializer
+)
+from api.permissions import (
+    IsAdminUserRole, IsOwnerOrProjectManager, IsProjectManagerOrAdmin
+)
 from api.filters import TimeEntryFilter
 from rest_framework.views import APIView
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -15,22 +23,13 @@ from django.utils.encoding import force_str, force_bytes
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
+from django.core.exceptions import PermissionDenied
 from rest_framework.generics import CreateAPIView
 from django.utils.timezone import now
 from django.db.models import Sum, F, ExpressionWrapper, DurationField
 import pandas as pd
 from django.db import transaction
-# # Create your views here.
-
-# class RegisterAPIView(APIView):
-#     permission_classes = [AllowAny]
-
-#     def post(self, request):
-#         serializer = RegisterSerializer(data=request.data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return Response({"message": "User registered successfully"}, status=status.HTTP_201_CREATED)
-#         return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+# Create your views here.
 
 class UserListAPIView(APIView):
     permission_classes = [IsAdminUser]
@@ -110,32 +109,6 @@ class ResetPasswordAPIView(APIView):
         user.save()
 
         return Response({"message": "Password reset successful"})
-        
-    
-# class StoreProjectAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def post(self, request):
-#         serializer = ProjectSerializer(data=request.data)
-#         if serializer.is_valid():
-#             project = serializer.save(created_by=request.user)
-
-#             ProjectMembership.objects.create(user=request.user, project=project, role_in_project="Manager")
-#             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
-#         else:
-#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-# class GetProjectAPIView(APIView):
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         projects = Project.objects.all()
-#         serializer = ProjectSerializer(projects, many=True)
-#         return Response({
-#             'total_projects': projects.count(),
-#             'projects': serializer.data,
-#         })
     
 class MeAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -148,16 +121,6 @@ class MeAPIView(APIView):
                 "is_staff": request.user.is_staff,
             }
         )
-    
-# class GetProjectMembershipAPIView(APIView):
-#     def get(self, request):
-#         project_membership = ProjectMembership.objects.exclude(role_in_project="Member")
-#         role = ProjectMembership.role_in_project
-#         serializer = ProjectSerializer({
-#             'Project Membership': project_membership,
-#             'role': role
-#         })
-#         return Response(serializer.data)
     
 class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
@@ -370,38 +333,66 @@ class ProjectViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=["POST"], url_path="bulk-upload")
     def bulk_upload(self, request):
+
         file = request.FILES.get("file")
 
         if not file:
-            return Response({"error": "No file uploaded"}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "No file uploaded"}, status=400)
+
         if not request.user.is_staff:
-            return Response({"error": "Only admin can bulk upload projects"}, status=status.HTTP_403_FORBIDDEN)
-        
+            return Response({"error": "Only admin can bulk upload"}, status=403)
+
+        created_count = 0
+        failed_count = 0
+        skipped_count = 0
+        failed_rows = []
+        skipped_rows = []
+
         try:
+            # File format validation
             if file.name.endswith(".csv"):
                 df = pd.read_csv(file)
             elif file.name.endswith(".xlsx"):
                 df = pd.read_excel(file)
             else:
-                return Response({"error": "Only CSV or XLSX allowed"}, status=status.HTTP_400_BAD_REQUEST)
-            
+                return Response({"error": "Only CSV or XLSX allowed"}, status=400)
+
             required_columns = {"name", "code", "description"}
             if not required_columns.issubset(df.columns):
                 return Response(
-                    {"error": f"File must contain columns: {required_columns}"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"error": f"File must contain columns {required_columns}"},
+                    status=400
                 )
-            
-            created_projects = []
-            with transaction.atomic():
-                for _, row in df.iterrows():
-                    project = Project.objects.create(
-                        name=row["name"],
-                        code=row["code"],
-                        description=row["description"],
-                        created_by=request.user
 
+            for index, row in df.iterrows():
+                try:
+                    name = str(row["name"]).strip()
+                    code = str(row["code"]).strip()
+                    description = str(row["description"]).strip()
+
+                    # Empty field validation
+                    if not name or not code:
+                        failed_count += 1
+                        failed_rows.append({
+                            "row": index + 2,
+                            "error": "Name or Code cannot be empty"
+                        })
+                        continue
+
+                    # Duplicate check
+                    if Project.objects.filter(code=code).exists():
+                        skipped_count += 1
+                        skipped_rows.append({
+                            "row": index + 2,
+                            "reason": f"Duplicate project code '{code}'"
+                        })
+                        continue
+
+                    project = Project.objects.create(
+                        name=name,
+                        code=code,
+                        description=description,
+                        created_by=request.user
                     )
 
                     ProjectMembership.objects.create(
@@ -410,18 +401,38 @@ class ProjectViewSet(viewsets.ModelViewSet):
                         role_in_project="Manager"
                     )
 
-                    created_projects.append(project.id)
+                    created_count += 1
 
-            return Response(
-                {
-                    "message": "Bulk upload successful",
-                    "created_count": len(created_projects),
-                    "project_ids": created_projects
-                },
-                status=status.HTTP_201_CREATED
+                except Exception as row_error:
+                    failed_count += 1
+                    failed_rows.append({
+                        "row": index + 2,
+                        "error": str(row_error)
+                    })
+
+            # 🔥 SAVE REPORT (Correctly)
+            report = BulkUploadReport.objects.create(
+                upload_type=BulkUploadReport.UploadTypeChoices.PROJECT,
+                uploaded_by=request.user,
+                total_records=len(df),
+                success_records=created_count,
+                failed_records=failed_count,
+                skipped_records=skipped_count,
+                file_name=file.name,
+                failed_details=failed_rows,
+                skipped_details=skipped_rows,
             )
+
+            return Response({
+                "message": "Bulk upload completed",
+                "run_id": report.run_id,
+                "created": created_count,
+                "failed": failed_count,
+                "skipped": skipped_count
+            })
+
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": str(e)}, status=500)
 
     
 class TimeEntryViewSet(viewsets.ModelViewSet):
@@ -435,11 +446,16 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     ordering = ["-start_time"]
 
     def get_queryset(self):
-        user = self.request.user
+        # user = self.request.user
 
-        return TimeEntry.objects.filter(
-            task__project__projectmembership__user=user
-        ).distinct()
+        # return TimeEntry.objects.filter(
+        #     task__project__projectmembership__user=user
+        # ).distinct()
+        return TimeEntry.objects.select_related(
+            "task",
+            "task__project",
+            "user"
+        )
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -458,40 +474,75 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
 class TasksViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    search_fields = ['status', 'description', 'priority']
-    ordering_fields = ['status', 'priority']
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+
+    # Filtering support
+    filterset_fields = ["project", "status", "priority", "assigned_to", "tags"]
+    search_fields = ["title", "description"]
+    ordering_fields = ["due_date", "priority", "status", "created_by"]
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return Task.objects.all()
-        return Task.objects.filter(assigned_to=self.request.user)
+        user = self.request.user
 
-    @action(detail=True, methods=['POST'])
+        queryset = Task.objects.select_related(
+            "project",
+            "assigned_to",
+            "created_by"
+        ).prefetch_related(
+            "tags"
+        )
+
+        # Admin sees everything
+        if user.is_staff:
+            queryset = Task.objects.all()
+        else:
+            # User sees tasks within projects they belong to
+            queryset = Task.objects.filter(
+                project__projectmembership__user=user
+            ).distinct()
+
+        # Manual due date filtering
+        due_from = self.request.query_params.get("due_from")
+        due_to = self.request.query_params.get("due_to")
+
+        if due_from:
+            queryset = queryset.filter(due_date__gte=due_from)
+
+        if due_to:
+            queryset = queryset.filter(due_date__lte=due_to)
+
+        return queryset
+
+    @action(detail=True, methods=["POST"])
     def assign(self, request, pk=None):
         task = self.get_object()
-
         user_id = request.data.get("user_id")
 
         if not user_id:
-            return Response(
-                {"error": "user_id is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            return Response({"error": "user_id required"}, status=400)
+
         try:
-            user = User.objects.get(id=user_id)
+            user_to_assign = User.objects.get(id=user_id)
         except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=404)
+
+        # Only manager can assign
+        is_manager = ProjectMembership.objects.filter(
+            user=request.user,
+            project=task.project,
+            role_in_project="Manager"
+        ).exists()
+
+        if not is_manager:
             return Response(
-                {"error": "User not found"},
-                status=status.HTTP_404_NOT_FOUND
+                {"error": "Only project manager can assign tasks."},
+                status=403
             )
-        task.assigned_to = user
+
+        task.assigned_to = user_to_assign
         task.save()
 
-        return Response(
-            {"message": f"Task assigned to {user.username}"}, status=status.HTTP_200_OK
-        )
+        return Response({"message": "Task assigned successfully"})
     
     @action(detail=True, methods=['POST'])
     def transition(self, request, pk=None):
@@ -535,7 +586,41 @@ class TasksViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        user = self.request.user
+        project = serializer.validated_data.get("project")
+
+        is_member = ProjectMembership.objects.filter(
+            user=user,
+            project=project
+        ).exists()
+
+        if not is_member:
+            raise PermissionDenied("You are not a member of this project.")
+
+        serializer.save(created_by=user)
+
+    def update(self, request, *args, **kwargs):
+        task = self.get_object()
+        user = request.user
+
+        is_manager = ProjectMembership.objects.filter(
+            user=user,
+            project=task.project,
+            role_in_project="Manager"
+        ).exists()
+
+        is_assignee = task.assigned_to == user
+
+        if not (is_manager or is_assignee):
+            return Response(
+                {"error": "You cannot update this task."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().update(request, *args, **kwargs)
+    
+    def partial_update(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
 
     @action(detail=False, methods=["POST"], url_path="bulk-upload")
     def bulk_upload(self, request):
@@ -650,6 +735,17 @@ class TasksViewSet(viewsets.ModelViewSet):
                         "row": index + 2,
                         "error": str(e)
                     })
+            BulkUploadReport.objects.create(
+                upload_type=BulkUploadReport.UploadTypeChoices.TASK,
+                uploaded_by=request.user,
+                total_records=len(df),
+                success_records=created_count,
+                failed_records=failed_count,
+                skipped_records=skipped_count,
+                failed_details=failed_rows,
+                skipped_details=skipped_rows,
+                file_name=file.name,
+            )
 
             return Response({
                 "message": "Bulk upload completed",
@@ -663,24 +759,66 @@ class TasksViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    @action(detail=False, methods=["GET"], url_path=r"project/(?P<project_id>\d+)")
+    def tasks_by_project(self, request, project_id=None):
+        queryset = self.get_queryset().filter(project_id=project_id)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=["GET", "POST"])
+    def comments(self, request, pk=None):
+        task = self.get_object()
+        comments = task.comments.select_related("author")
+
+        if request.method == "GET":
+            comments = task.comments.all().order_by("-created_at")
+            serializer = CommentSerializer(comments, many=True)
+            return Response(serializer.data)
+
+        if request.method == "POST":
+            serializer = CommentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(task=task, author=request.user)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.data, status=status.HTTP_400_BAD_REQUEST)
 
 class CommentViewSet(viewsets.ModelViewSet):
-    queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
 
-    # def list(self, request):
-    #     queryset = Task.objects.all()
-    #     serializer_class = TaskSerializer(queryset, many=True)
-    #     permission_classes = [IsAuthenticated]
-    #     return Response(serializer_class.data)
+    def get_queryset(self):
+        task_id = self.kwargs.get("task_pk")
+        return Comment.objects.filter(task_id=task_id)
+    
+    def perform_create(self, serializer):
+        task_id = self.kwargs.get("task_pk")
+        task = Task.objects.get(id=task_id)
+
+        serializer.save(
+            author=self.request.user,
+            task=task
+        )
 
 
+class NotificationViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        return Notification.objects.filter(recipient=self.request.user).order_by("-created_at")
 
-# class UserViewSet(viewsets.ModelViewSet):
-#     def list(self, request):
-#         queryset = User.objects.all()
-#         serializer_class = UserSerializer(queryset, many=True)
-#         return Response(serializer_class.data)
+    @action(detail=True, methods=["POST"])
+    def mark_read(self, request, pk=None):
+        notification = self.get_object()
+        notification.is_read = True
+        notification.save()
+        return Response({"message": "Marked as read"})
+
+class BulkUploadReportViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = BulkUploadReportSerializer
+    permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        return BulkUploadReport.objects.select_related("uploaded_by")

@@ -1,5 +1,6 @@
-from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry
+from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry, Notification, BulkUploadReport
 from rest_framework import serializers
+import re
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -101,6 +102,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'estimate_hours',
             'created_by',
             'assigned_to',
+            'tags',
             'days_left'
         )
         read_only_fields = ['created_by']
@@ -136,18 +138,53 @@ class TaskSerializer(serializers.ModelSerializer):
         return data
 
 class CommentSerializer(serializers.ModelSerializer):
+    author_username = serializers.CharField(source="author.username", read_only=True)
+
     class Meta:
         model = Comment
-        fields = '__all__'
+        fields = ["id", "task", "author", "author_username", "body", "created_at"]
+        read_only_fields = ["author", "created_at", "task"]
+
+    def create(self, validated_data):
+        comment = Comment.objects.create(
+            **validated_data
+        )
+
+        # Parse @mentions
+        mentioned_usernames = re.findall(r"@(\w+)", comment.body)
+
+        for username in mentioned_usernames:
+            try:
+                mentioned_user = User.objects.get(username=username)
+
+                # Create notification
+                Notification.objects.create(
+                    recipient=mentioned_user,
+                    sender=comment.author,
+                    task=comment.task,
+                    comment=comment,
+                    message=f"{comment.author.username} mentioned you in a comment"
+                )
+
+            except User.DoesNotExist:
+                continue
+
+        return comment
 
 class TimeEntrySerializer(serializers.ModelSerializer):
     timeline = serializers.DurationField(read_only=True)
+    project_name = serializers.CharField(source="task.project.name", read_only=True)
+    task_title = serializers.CharField(source="task.title", read_only=True)
+    username = serializers.CharField(source="user.username", read_only=True)
     class Meta:
         model = TimeEntry
         fields = (
             'id',
             'task',
+            "task_title",
+            "project_name",
             'user',
+            "username",
             'start_time',
             'end_time',
             'notes',
@@ -173,5 +210,26 @@ class TimeEntrySerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("You are not a member of this project, cannot log time.")
         return data
 
+class NotificationSerializer(serializers.ModelSerializer):
+    sender_username = serializers.ReadOnlyField(source="sender.username")
 
+    class Meta:
+        model = Notification
+        fields = [
+            "id",
+            "sender",
+            "sender_username",
+            "task",
+            "comment",
+            "message",
+            "is_read",
+            "created_at"
+        ]
+        read_only_fields = ["sender", "created_at"]
 
+class BulkUploadReportSerializer(serializers.ModelSerializer):
+    uploaded_by_username = serializers.ReadOnlyField(source="uploaded_by.username")
+
+    class Meta:
+        model = BulkUploadReport
+        fields = "__all__"
