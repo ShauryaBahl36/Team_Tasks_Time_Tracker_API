@@ -75,7 +75,7 @@ export default function Tasks() {
 
         // 2️⃣ Mark all as read in backend
         await axios.post(
-        `http://localhost:8000/url/notifications/${id}/mark_read/`,
+        `http://localhost:8000/url/notifications/mark_read/`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
         );

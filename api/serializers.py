@@ -1,4 +1,6 @@
-from api.models import User, Project, ProjectMembership, Task, Comment, TimeEntry, Notification, BulkUploadReport
+from api.models import (
+    User, Project, ProjectMembership, Task, Comment, TimeEntry, Notification, BulkUploadReport
+)
 from rest_framework import serializers
 import re
 
@@ -28,6 +30,29 @@ class UserListSerializer(serializers.ModelSerializer):
             "is_active",
             "date_joined"
         ]
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "name",
+            "avatar_url",
+            "timezone",
+            "user_role",
+            "is_staff",
+        ]
+    def validate(self, data):
+        user = self.instance
+
+        if user.is_staff and data.get("user_role") == "Member":
+            raise serializers.ValidationError(
+                "Staff users cannot have Member role."
+            )
+
+        return data
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -132,9 +157,9 @@ class TaskSerializer(serializers.ModelSerializer):
                             f"Invalid status change {old_status} -> {new_status}. only managers can skip."
                         )
 
-        is_member = ProjectMembership.objects.filter(user=user, project=project).exists()
-        if not is_member:
-            raise serializers.ValidationError("You are not a member of this project, cannot create task")
+        # is_member = ProjectMembership.objects.filter(user=user, project=project).exists()
+        # if not is_member:
+        #     raise serializers.ValidationError("You are not a member of this project, cannot create task")
         return data
 
 class CommentSerializer(serializers.ModelSerializer):

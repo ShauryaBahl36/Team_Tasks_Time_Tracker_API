@@ -11,7 +11,11 @@ def assign_permissions_by_role(sender, instance, **kwargs):
     if instance.user_role == User.RoleChoices.ADMIN:
         instance.is_staff = True
         instance.is_superuser = True
-        instance.save(update_fields=["is_staff", "is_superuser"])
+        # instance.save(update_fields=["is_staff", "is_superuser"])
+        User.objects.filter(pk=instance.pk).update(
+            is_staff=instance.is_staff,
+            is_superuser=instance.is_superuser
+        )
         return
     
     perms = ROLE_PERMISSIONS.get(instance.user_role, [])

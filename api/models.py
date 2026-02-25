@@ -15,6 +15,12 @@ class User(AbstractUser):
     timezone = models.CharField(max_length=100)
     user_role = models.CharField(max_length=20, choices=RoleChoices.choices, default=RoleChoices.MEMBER)
 
+    def save(self, *args, **kwargs):
+        # 🔥 Enforce logic consistency
+        if self.is_staff and self.user_role == self.RoleChoices.MEMBER:
+            self.user_role = self.RoleChoices.ADMIN
+        super().save(*args, **kwargs)
+
     class Meta:
         permissions = [
             ('list_users', 'Listing of Users'),

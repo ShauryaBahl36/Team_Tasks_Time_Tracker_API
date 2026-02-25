@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import Profile from "./Profile";
 
 export default function Projects() {
   const token = localStorage.getItem("access");
@@ -279,7 +278,7 @@ export default function Projects() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 px-4">
 
       {/* Header */}
       <div>
@@ -289,11 +288,6 @@ export default function Projects() {
         <p className="text-slate-400 text-sm">
           Manage projects, members and summaries
         </p>
-      </div>
-
-      {/* Profile */}
-      <div className="bg-slate-800 p-5 rounded-xl shadow-md">
-        <Profile user={user} />
       </div>
 
       {/* Create Project */}

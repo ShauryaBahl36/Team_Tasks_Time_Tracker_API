@@ -1,34 +1,37 @@
 from django.shortcuts import render, get_object_or_404
-from api.serializers import RegisterSerializer
+from django.db import transaction
+from django.db.models import (
+    Sum, F, ExpressionWrapper, DurationField
+)
+from django.utils.encoding import force_str, force_bytes
+from django.utils.timezone import now
+from django.utils.http import (
+    urlsafe_base64_decode, urlsafe_base64_encode
+)
+from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.core.mail import send_mail
+from django.core.exceptions import PermissionDenied
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, status, filters
 from rest_framework.response import Response
 from rest_framework.permissions import (
     IsAuthenticated, IsAdminUser, AllowAny
 )
 from rest_framework.decorators import action
-from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.views import APIView
+from rest_framework.generics import CreateAPIView
 from api.models import (
     User, Project, ProjectMembership, Task, Comment, TimeEntry, Notification, BulkUploadReport
 )
 from api.serializers import (
-    ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer, UserListSerializer, NotificationSerializer, BulkUploadReportSerializer
+    ProjectSerializer, TaskSerializer, CommentSerializer, TimeEntrySerializer, UserListSerializer, UserProfileSerializer, NotificationSerializer, BulkUploadReportSerializer, RegisterSerializer
 )
 from api.permissions import (
-    IsAdminUserRole, IsOwnerOrProjectManager, IsProjectManagerOrAdmin
+    IsAdminUserRole, IsOwnerOrProjectManager, IsProjectManagerOrAdmin, IsProjectMember
 )
 from api.filters import TimeEntryFilter
-from rest_framework.views import APIView
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.utils.encoding import force_str, force_bytes
-from django.contrib.auth import get_user_model
-from django.contrib.auth.tokens import default_token_generator
-from django.core.mail import send_mail
-from django.core.exceptions import PermissionDenied
-from rest_framework.generics import CreateAPIView
-from django.utils.timezone import now
-from django.db.models import Sum, F, ExpressionWrapper, DurationField
 import pandas as pd
-from django.db import transaction
 # Create your views here.
 
 class UserListAPIView(APIView):
@@ -39,7 +42,20 @@ class UserListAPIView(APIView):
         serializer = UserListSerializer(users, many=True)
         return Response(serializer.data)
     
-class RegisterAPIView(CreateAPIView):  # Changed from APIView to CreateAPIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import RetrieveUpdateAPIView
+
+class UserProfileAPIView(RetrieveUpdateAPIView):
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+    
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, partial=True)
+    
+class RegisterAPIView(CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
     
@@ -446,40 +462,33 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
     ordering = ["-start_time"]
 
     def get_queryset(self):
-        # user = self.request.user
+        user = self.request.user
 
-        # return TimeEntry.objects.filter(
-        #     task__project__projectmembership__user=user
-        # ).distinct()
-        return TimeEntry.objects.select_related(
+        base_queryset = TimeEntry.objects.select_related(
             "task",
             "task__project",
             "user"
         )
 
+        if user.is_staff:
+            return base_queryset
+
+        return base_queryset.filter(user=user)
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
-    
-# class LogoutVIew(APIView):
-#     def post(self, request):
-#         try:
-#             refresh_token = request.data["refresh"]
-#             token = RefreshToken(refresh_token)
-#             token.blacklist()
-#             return Response({"message": "Logged out successfully"})
-#         except:
-#             return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
         
 class TasksViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    
 
     # Filtering support
     filterset_fields = ["project", "status", "priority", "assigned_to", "tags"]
     search_fields = ["title", "description"]
     ordering_fields = ["due_date", "priority", "status", "created_by"]
+    ordering = ["-id"]
 
     def get_queryset(self):
         user = self.request.user
